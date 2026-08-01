@@ -1,4 +1,5 @@
 const std = @import("std");
+const editor = @import("editor.zig");
 
 const stdin_fd = std.posix.STDIN_FILENO;
 
@@ -53,6 +54,77 @@ pub fn readKey() !Key {
             }
             return .{ .byte = first };
         }
+    }
+}
+
+pub fn handleKey(key: Key, waiting_for_gg: *bool, editor_main: *editor.Editor, exit_editor: *bool) void {
+    switch (key) {
+        .byte => |byte| {
+            if (byte == ctrlKey('q')) exit_editor.* = true;
+            if (byte == 'g') {
+                if (waiting_for_gg.*) {
+                    editor_main.cursor_y = 0;
+                    waiting_for_gg.* = false;
+                } else {
+                    waiting_for_gg.* = true;
+                }
+            } else {
+                if (byte == 'G') {
+                    if (editor_main.rows.items.len != 0) {
+                        editor_main.cursor_y = editor_main.rows.items.len - 1;
+                    }
+                }
+                waiting_for_gg.* = false;
+            }
+            if (byte == '0') {
+                editor_main.cursor_x = 0;
+            }
+            if (byte == '$') {
+                if (editor_main.currentRow()) |row| {
+                    if (row.chars.len > 0) {
+                        editor_main.cursor_x = row.chars.len - 1;
+                    } else {
+                        editor_main.cursor_x = 0;
+                    }
+                } else {
+                    editor_main.cursor_x = 0;
+                }
+            }
+        },
+        .arrow_left => {
+            if (editor_main.cursor_x > 0) editor_main.cursor_x -= 1;
+            waiting_for_gg.* = false;
+        },
+        .arrow_down => {
+            if (editor_main.cursor_y + 1 < editor_main.rows.items.len) editor_main.cursor_y += 1;
+            waiting_for_gg.* = false;
+        },
+        .arrow_up => {
+            if (editor_main.cursor_y > 0) editor_main.cursor_y -= 1;
+            waiting_for_gg.* = false;
+        },
+        .arrow_right => {
+            if (editor_main.currentRow()) |row| {
+                if (editor_main.cursor_x + 1 < row.chars.len) {
+                    editor_main.cursor_x += 1;
+                }
+            }
+            waiting_for_gg.* = false;
+        },
+        .delete => {
+            waiting_for_gg.* = false;
+        },
+    }
+
+    if (editor_main.currentRow()) |row| {
+        const row_len = row.chars.len;
+        if (row_len == 0) {
+            editor_main.cursor_x = 0;
+        } else if (editor_main.cursor_x >= row_len) {
+            editor_main.cursor_x = row_len - 1;
+        }
+    } else {
+        editor_main.cursor_x = 0;
     }
 }
 

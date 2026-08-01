@@ -10,6 +10,10 @@ pub const Row = struct {
 
 pub const Editor = struct {
     rows: std.ArrayList(Row) = .empty,
+    cursor_x: usize = 0,
+    cursor_y: usize = 0,
+    row_offset: usize = 0,
+    col_offset: usize = 0,
 
     pub fn deinit(self: *Editor, allocator: std.mem.Allocator) void {
         for (self.rows.items) |*row| {
@@ -24,5 +28,13 @@ pub const Editor = struct {
 
         const row = Row{ .chars = chars };
         try self.rows.append(allocator, row);
+    }
+
+    pub fn currentRow(self: *Editor) ?*Row {
+        if (self.cursor_y >= self.rows.items.len) {
+            return null;
+        } else {
+            return &self.rows.items[self.cursor_y];
+        }
     }
 };

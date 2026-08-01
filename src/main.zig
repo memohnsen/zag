@@ -15,6 +15,7 @@ pub fn main(init: std.process.Init) !void {
     var editor_main = editor.Editor{};
     defer editor_main.deinit(gpa);
     try editor_main.appendRow(gpa, "Hello, zag");
+    try editor_main.appendRow(gpa, "zag");
 
     // get original terminal attributes so we can reset it once user exits
     const original_termios = try std.posix.tcgetattr(stdin_fd);
@@ -23,57 +24,12 @@ pub fn main(init: std.process.Init) !void {
     defer ui.clearScreen(io) catch {};
 
     const terminal_size = try ui.getTerminalSize(io);
-    var cursor_x: usize = 0;
-    var cursor_y: usize = 0;
     var waiting_for_gg = false;
+    var exit_editor = false;
 
-    std.debug.print("Raw mode active. Press 'C-q' to exit\r\n", .{});
-
-    while (true) {
-        try ui.refreshScreen(io, terminal_size, gpa, cursor_x, cursor_y, &editor_main);
+    while (!exit_editor) {
+        try ui.refreshScreen(io, terminal_size, gpa, editor_main.cursor_x, editor_main.cursor_y, &editor_main);
         const key = try input.readKey();
-        switch (key) {
-            .byte => |byte| {
-                if (byte == input.ctrlKey('q')) break;
-                if (byte == 'g') {
-                    if (waiting_for_gg) {
-                        cursor_y = 0;
-                        waiting_for_gg = false;
-                    } else {
-                        waiting_for_gg = true;
-                    }
-                } else {
-                    if (byte == 'G') {
-                        cursor_y = terminal_size.rows - 1;
-                    }
-                    waiting_for_gg = false;
-                }
-                if (byte == '0') {
-                    cursor_x = 0;
-                }
-                if (byte == '$') {
-                    cursor_x = terminal_size.columns - 1;
-                }
-            },
-            .arrow_left => {
-                if (cursor_x > 0) cursor_x -= 1;
-                waiting_for_gg = false;
-            },
-            .arrow_down => {
-                if (cursor_y + 1 < terminal_size.rows) cursor_y += 1;
-                waiting_for_gg = false;
-            },
-            .arrow_up => {
-                if (cursor_y > 0) cursor_y -= 1;
-                waiting_for_gg = false;
-            },
-            .arrow_right => {
-                if (cursor_x + 1 < terminal_size.columns) cursor_x += 1;
-                waiting_for_gg = false;
-            },
-            .delete => {
-                waiting_for_gg = false;
-            },
-        }
+        input.handleKey(key, &waiting_for_gg, &editor_main, &exit_editor);
     }
 }
