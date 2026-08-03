@@ -1,89 +1,60 @@
 const std = @import("std");
+const vaxis = @import("vaxis");
+
 const editor = @import("editor.zig");
 
-const TerminalSize = struct {
-    rows: usize,
-    columns: usize,
-};
+const welcome_text = "Zag Editor -- Version 0.1.0";
 
-pub fn getTerminalSize(io: std.Io) !TerminalSize {
-    var window_size: std.posix.winsize = .{ .row = 0, .col = 0, .xpixel = 0, .ypixel = 0 };
-
-    const result = (try io.operate(.{ .device_io_control = .{ .file = .stdout(), .code = std.posix.T.IOCGWINSZ, .arg = &window_size } })).device_io_control;
-
-    if (result < 0 or window_size.row == 0 or window_size.col == 0) {
-        // you can apparently create your own random errors out of nowhere
-        return error.UnableToGetTerminalSize;
-    }
-
-    return .{ .rows = @intCast(window_size.row), .columns = @intCast(window_size.col) };
-}
-
-pub fn drawRows(io: *std.Io.Writer, screen_rows: TerminalSize, document: *const editor.Editor) !void {
-    const rows = screen_rows.rows;
-
-    for (0..rows) |screen_row| {
-        const file_row = screen_row + document.row_offset;
-
-        if (file_row < document.rows.items.len) {
-            const row_chars = document.rows.items[file_row].chars;
-            const visible_length = @min(row_chars.len, screen_rows.columns);
-            try io.writeAll(row_chars[0..visible_length]);
-        } else if (screen_row == rows / 3 and document.rows.items.len == 0) {
-            try showWelcomeScreen(io, screen_rows);
-        } else {
-            try io.writeAll("~");
-        }
-
-        try io.writeAll("\x1b[K");
-
-        if (screen_row < rows - 1) {
-            try io.writeAll("\r\n");
-        }
-    }
-}
-
-fn showWelcomeScreen(io: *std.Io.Writer, screen_rows: TerminalSize) !void {
-    const welcome_text = "Zag Editor -- Version 0.1.0";
-    const welcome_len = @min(welcome_text.len, screen_rows.columns);
-    var padding = (screen_rows.columns - welcome_len) / 2;
-    if (padding > 0) {
-        try io.writeAll("~");
-        padding -= 1;
-        try io.splatByteAll(' ', padding);
-    }
-    try io.writeAll(welcome_text[0..welcome_len]);
-}
-
-pub fn clearScreen(io: std.Io) !void {
-    try std.Io.File.writeStreamingAll(.stdout(), io, "\x1b[2J");
-    try std.Io.File.writeStreamingAll(.stdout(), io, "\x1b[H");
-    try std.Io.File.writeStreamingAll(.stdout(), io, "\x1b[?25h");
-}
-
-pub fn refreshScreen(
-    io: std.Io,
-    screen_rows: TerminalSize,
-    gpa: std.mem.Allocator,
-    cursor_x: usize,
-    cursor_y: usize,
+pub fn refresh(
+    vx: *vaxis.Vaxis,
+    tty: *std.Io.Writer,
     document: *const editor.Editor,
 ) !void {
-    var writer = std.Io.Writer.Allocating.init(gpa);
-    defer writer.deinit();
+    const window = vx.window();
+    window.clear();
+    drawRows(window, document);
 
-    // esc sequence to hide cursor
-    try writer.writer.writeAll("\x1b[?25l");
+    const screen_x = document.cursor_x - document.col_offset;
+    const screen_y = document.cursor_y - document.row_offset;
+    window.showCursor(@intCast(screen_x), @intCast(screen_y));
 
-    // esc sequence to move to row 1 col 1
-    try writer.writer.writeAll("\x1b[H");
-    try drawRows(&writer.writer, screen_rows, document);
+    try vx.render(tty);
+}
 
-    // esc sequence to move to row col of cursor
-    const screen_cursor_y = cursor_y - document.row_offset;
-    try writer.writer.print("\x1b[{d};{d}H", .{ screen_cursor_y + 1, cursor_x + 1 });
+fn drawRows(window: vaxis.Window, document: *const editor.Editor) void {
+    for (0..window.height) |screen_row| {
+        const file_row = document.row_offset + screen_row;
 
-    // esc sequence to show cursor
-    try writer.writer.writeAll("\x1b[?25h");
-    try std.Io.File.writeStreamingAll(.stdout(), io, writer.written());
+        if (file_row < document.rows.items.len) {
+            const chars = document.rows.items[file_row].chars;
+            const start = @min(document.col_offset, chars.len);
+            printAt(window, chars[start..], screen_row, 0);
+            continue;
+        }
+
+        if (document.rows.items.len == 0 and screen_row == window.height / 3) {
+            drawWelcome(window, screen_row);
+        } else {
+            printAt(window, "~", screen_row, 0);
+        }
+    }
+}
+
+fn drawWelcome(window: vaxis.Window, screen_row: usize) void {
+    printAt(window, "~", screen_row, 0);
+
+    const visible_len = @min(welcome_text.len, @as(usize, window.width));
+    const padding = (@as(usize, window.width) - visible_len) / 2;
+    printAt(window, welcome_text[0..visible_len], screen_row, padding);
+}
+
+fn printAt(window: vaxis.Window, text: []const u8, row: usize, col: usize) void {
+    _ = window.printSegment(
+        .{ .text = text },
+        .{
+            .row_offset = @intCast(row),
+            .col_offset = @intCast(col),
+            .wrap = .none,
+        },
+    );
 }

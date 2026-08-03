@@ -26,23 +26,26 @@ pub fn main(init: std.process.Init) !void {
     var event_loop: vaxis.Loop(Event) = .init(io, &tty, &vx);
     try event_loop.start();
     defer event_loop.stop();
+    try event_loop.installResizeHandler();
+    defer event_loop.uninstallResizeHandler();
+    try vx.enterAltScreen(tty.writer());
+    try vx.queryTerminal(tty.writer(), .fromSeconds(1));
 
-    defer ui.clearScreen(io) catch {};
+    var command_state: commands.State = .{};
 
-    const terminal_size = try ui.getTerminalSize(io);
-    var pending_g = false;
-    var exit_editor = false;
-
-    while (!exit_editor) {
-        ed.scroll(terminal_size.rows, terminal_size.columns);
-        try ui.refreshScreen(io, terminal_size, gpa, ed.cursor_x, ed.cursor_y, &ed);
-
+    while (true) {
         const event = try event_loop.nextEvent();
         switch (event) {
             .key_press => |key| {
-                commands.handleVaxisKey(key, &exit_editor, &ed, &pending_g);
+                if (commands.handleKey(key, &ed, &command_state)) break;
             },
-            .winsize => {},
+            .winsize => |size| {
+                try vx.resize(gpa, tty.writer(), size);
+            },
         }
+
+        const window = vx.window();
+        ed.scroll(window.height, window.width);
+        try ui.refresh(&vx, tty.writer(), &ed);
     }
 }

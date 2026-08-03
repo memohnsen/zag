@@ -39,19 +39,17 @@ pub const Editor = struct {
     }
 
     pub fn scroll(self: *Editor, screen_rows: usize, screen_cols: usize) void {
+        if (screen_rows == 0 or screen_cols == 0) return;
+
         if (self.cursor_y < self.row_offset) {
             self.row_offset = self.cursor_y;
-        }
-
-        if (self.cursor_y >= self.row_offset + screen_rows) {
+        } else if (self.cursor_y - self.row_offset >= screen_rows) {
             self.row_offset = self.cursor_y - screen_rows + 1;
         }
 
         if (self.cursor_x < self.col_offset) {
             self.col_offset = self.cursor_x;
-        }
-
-        if (self.cursor_x >= self.col_offset + screen_cols) {
+        } else if (self.cursor_x - self.col_offset >= screen_cols) {
             self.col_offset = self.cursor_x - screen_cols + 1;
         }
     }
@@ -59,21 +57,25 @@ pub const Editor = struct {
 
 test "appending rows" {
     const allocator = std.testing.allocator;
-    const editor = Editor{};
-    try std.testing.expect(editor.rows == .empty);
-    editor.appendRow(allocator, "Hello");
-    defer allocator.free(editor);
-    try std.testing.expect(std.mem.eql(u8, editor.rows, "Hello"));
+    var ed: Editor = .{};
+    defer ed.deinit(allocator);
+
+    try std.testing.expectEqual(@as(usize, 0), ed.rows.items.len);
+    try ed.appendRow(allocator, "Hello");
+    try std.testing.expectEqual(@as(usize, 1), ed.rows.items.len);
+    try std.testing.expectEqualStrings("Hello", ed.rows.items[0].chars);
 }
 
 test "get current row" {
     const allocator = std.testing.allocator;
-    var editor = Editor{};
-    try std.testing.expect(editor.rows == .empty);
-    editor.appendRow(allocator, "Hello");
-    editor.appendRow(allocator, "Hello");
-    editor.appendRow(allocator, "Hello");
-    defer allocator.free(editor);
-    editor.cursor_y = 2;
-    try std.testing.expect(editor.cursor_y == editor.currentRow());
+    var ed: Editor = .{};
+    defer ed.deinit(allocator);
+
+    try ed.appendRow(allocator, "zero");
+    try ed.appendRow(allocator, "one");
+    try ed.appendRow(allocator, "two");
+    ed.cursor_y = 2;
+
+    const row = ed.currentRow() orelse return error.TestExpectedEqual;
+    try std.testing.expectEqualStrings("two", row.chars);
 }
