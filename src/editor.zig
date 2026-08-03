@@ -82,7 +82,7 @@ pub const Editor = struct {
 
 test "appending rows" {
     const allocator = std.testing.allocator;
-    var document: Editor = .{};
+    var document = Editor{};
     defer document.deinit(allocator);
 
     try std.testing.expectEqual(@as(usize, 0), document.rows.items.len);
@@ -93,7 +93,7 @@ test "appending rows" {
 
 test "get current row" {
     const allocator = std.testing.allocator;
-    var document: Editor = .{};
+    var document = Editor{};
     defer document.deinit(allocator);
 
     try document.appendRow(allocator, "zero");
@@ -103,4 +103,18 @@ test "get current row" {
 
     const row = document.currentRow() orelse return error.TestExpectedEqual;
     try std.testing.expectEqualStrings("two", row.chars);
+}
+
+test "Mode fmt prints string" {
+    var document = Editor{};
+    document.mode = .normal;
+    try std.testing.expect(std.mem.eql(u8, document.mode.fmt(), "NORMAL"));
+    document.mode = .insert;
+    try std.testing.expect(std.mem.eql(u8, document.mode.fmt(), "INSERT"));
+    document.mode = .replace;
+    try std.testing.expect(std.mem.eql(u8, document.mode.fmt(), "REPLACE"));
+    document.mode = .visual;
+    try std.testing.expect(std.mem.eql(u8, document.mode.fmt(), "VISUAL"));
+    document.mode = .command;
+    try std.testing.expect(std.mem.eql(u8, document.mode.fmt(), "COMMAND"));
 }

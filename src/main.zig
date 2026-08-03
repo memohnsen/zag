@@ -81,3 +81,9 @@ pub fn main(init: std.process.Init) !void {
         try ui.refresh(&vx, tty.writer(), &document);
     }
 }
+
+test "all" {
+    _ = @import("commands.zig");
+    _ = @import("editor.zig");
+    _ = @import("ui.zig");
+}
