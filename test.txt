@@ -14,18 +14,12 @@ pub const Editor = struct {
     cursor_y: usize = 0,
     row_offset: usize = 0,
     col_offset: usize = 0,
-    filename: ?[]u8 = null,
 
     pub fn deinit(self: *Editor, allocator: std.mem.Allocator) void {
         for (self.rows.items) |*row| {
             Row.deinit(row, allocator);
         }
         self.rows.deinit(allocator);
-
-        // Filename is stored separately after duping so must free
-        if (self.filename) |name| {
-            allocator.free(name);
-        }
     }
 
     pub fn appendRow(self: *Editor, allocator: std.mem.Allocator, input: []const u8) !void {

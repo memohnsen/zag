@@ -1,5 +1,5 @@
 run:
-    zig build run
+    zig build run -- ./test.txt
 
 build:
     zig build
