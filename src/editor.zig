@@ -8,6 +8,24 @@ pub const Row = struct {
     }
 };
 
+pub const Mode = enum {
+    normal,
+    insert,
+    visual,
+    command,
+    replace,
+
+    pub fn fmt(self: Mode) []const u8 {
+        return switch (self) {
+            .normal => "NORMAL",
+            .insert => "INSERT",
+            .visual => "VISUAL",
+            .command => "COMMAND",
+            .replace => "REPLACE",
+        };
+    }
+};
+
 pub const Editor = struct {
     rows: std.ArrayList(Row) = .empty,
     cursor_x: usize = 0,
@@ -15,6 +33,7 @@ pub const Editor = struct {
     row_offset: usize = 0,
     col_offset: usize = 0,
     filename: ?[]u8 = null,
+    mode: Mode = .normal,
 
     pub fn deinit(self: *Editor, allocator: std.mem.Allocator) void {
         for (self.rows.items) |*row| {
@@ -63,25 +82,25 @@ pub const Editor = struct {
 
 test "appending rows" {
     const allocator = std.testing.allocator;
-    var ed: Editor = .{};
-    defer ed.deinit(allocator);
+    var document: Editor = .{};
+    defer document.deinit(allocator);
 
-    try std.testing.expectEqual(@as(usize, 0), ed.rows.items.len);
-    try ed.appendRow(allocator, "Hello");
-    try std.testing.expectEqual(@as(usize, 1), ed.rows.items.len);
-    try std.testing.expectEqualStrings("Hello", ed.rows.items[0].chars);
+    try std.testing.expectEqual(@as(usize, 0), document.rows.items.len);
+    try document.appendRow(allocator, "Hello");
+    try std.testing.expectEqual(@as(usize, 1), document.rows.items.len);
+    try std.testing.expectEqualStrings("Hello", document.rows.items[0].chars);
 }
 
 test "get current row" {
     const allocator = std.testing.allocator;
-    var ed: Editor = .{};
-    defer ed.deinit(allocator);
+    var document: Editor = .{};
+    defer document.deinit(allocator);
 
-    try ed.appendRow(allocator, "zero");
-    try ed.appendRow(allocator, "one");
-    try ed.appendRow(allocator, "two");
-    ed.cursor_y = 2;
+    try document.appendRow(allocator, "zero");
+    try document.appendRow(allocator, "one");
+    try document.appendRow(allocator, "two");
+    document.cursor_y = 2;
 
-    const row = ed.currentRow() orelse return error.TestExpectedEqual;
+    const row = document.currentRow() orelse return error.TestExpectedEqual;
     try std.testing.expectEqualStrings("two", row.chars);
 }

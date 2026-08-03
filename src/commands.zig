@@ -9,78 +9,136 @@ pub const State = struct {
 
 const Command = enum {
     quit,
+
+    // NAVIGATION
     left,
     right,
     up,
     down,
-    first_g,
+    doc_start_gg,
+    line_start_gh,
+    line_end_gl,
     document_end,
     line_start,
     line_end,
+
+    // MODES
+    insert,
+    normal,
+    command,
+    visual,
+    replace,
+
     other,
 };
 
-pub fn handleKey(key: vaxis.Key, ed: *editor.Editor, state: *State) bool {
-    const command = commandFromKey(key);
+pub fn handleKey(key: vaxis.Key, document: *editor.Editor, state: *State) bool {
+    // load pending state into a const so we don't have to false it every branch
+    const pending_g = state.pending_g;
+    state.pending_g = false;
+
+    const command = commandFromKey(key, document, pending_g);
 
     switch (command) {
         .quit => return true,
+
+        // NAVIGATION
         .left => {
-            if (ed.cursor_x > 0) ed.cursor_x -= 1;
-            state.pending_g = false;
+            if (document.cursor_x > 0) document.cursor_x -= 1;
         },
         .right => {
-            if (ed.currentRow()) |row| {
-                if (ed.cursor_x + 1 < row.chars.len) ed.cursor_x += 1;
+            if (document.currentRow()) |row| {
+                if (document.cursor_x + 1 < row.chars.len) document.cursor_x += 1;
             }
-            state.pending_g = false;
         },
         .up => {
-            if (ed.cursor_y > 0) ed.cursor_y -= 1;
-            state.pending_g = false;
+            if (document.cursor_y > 0) document.cursor_y -= 1;
         },
         .down => {
-            if (ed.cursor_y + 1 < ed.rows.items.len) ed.cursor_y += 1;
-            state.pending_g = false;
+            if (document.cursor_y + 1 < document.rows.items.len) document.cursor_y += 1;
         },
-        .first_g => {
-            if (state.pending_g) {
-                ed.cursor_y = 0;
+        .doc_start_gg => {
+            if (pending_g) {
+                document.cursor_y = 0;
+                state.pending_g = false;
+            } else {
+                state.pending_g = true;
+            }
+        },
+        .line_start_gh => {
+            if (pending_g) {
+                document.cursor_x = 0;
+                state.pending_g = false;
+            } else {
+                state.pending_g = true;
+            }
+        },
+        .line_end_gl => {
+            if (pending_g) {
+                document.cursor_x = document.currentRow().?.chars.len - 1;
                 state.pending_g = false;
             } else {
                 state.pending_g = true;
             }
         },
         .document_end => {
-            if (ed.rows.items.len > 0) ed.cursor_y = ed.rows.items.len - 1;
-            state.pending_g = false;
+            if (document.rows.items.len > 0) document.cursor_y = document.rows.items.len - 1;
         },
         .line_start => {
-            ed.cursor_x = 0;
-            state.pending_g = false;
+            document.cursor_x = 0;
         },
         .line_end => {
-            if (ed.currentRow()) |row| {
-                ed.cursor_x = if (row.chars.len == 0) 0 else row.chars.len - 1;
+            if (document.currentRow()) |row| {
+                document.cursor_x = if (row.chars.len == 0) 0 else row.chars.len - 1;
             } else {
-                ed.cursor_x = 0;
+                document.cursor_x = 0;
             }
-            state.pending_g = false;
         },
+
+        // MODES
+        .normal => document.mode = .normal,
+        .insert => document.mode = .insert,
+        .visual => document.mode = .visual,
+        .command => document.mode = .command,
+        .replace => document.mode = .replace,
+
         .other => state.pending_g = false,
     }
 
-    clampCursorX(ed);
+    clampCursorX(document);
     return false;
 }
 
-fn commandFromKey(key: vaxis.Key) Command {
-    if (key.matches('q', .{ .alt = true })) return .quit;
-    if (key.matches('G', .{})) return .document_end;
-    if (key.matches('$', .{})) return .line_end;
-    if (key.matches('g', .{})) return .first_g;
-    if (key.matches('0', .{})) return .line_start;
+fn commandFromKey(key: vaxis.Key, document: *editor.Editor, pending_g: bool) Command {
+    if (key.matches('q', .{ .ctrl = true })) return .quit;
 
+    // NAVIGATION
+    if (key.matches('G', .{}) and document.mode == .normal) return .document_end;
+    if (key.matches('$', .{}) and document.mode == .normal) return .line_end;
+    if (key.matches('g', .{}) and document.mode == .normal) return .doc_start_gg;
+    if (key.matches('h', .{}) and document.mode == .normal and pending_g) return .line_start_gh;
+    if (key.matches('l', .{}) and document.mode == .normal and pending_g) return .line_end_gl;
+    if (key.matches('0', .{}) and document.mode == .normal) return .line_start;
+    if (key.matches('h', .{}) and document.mode == .normal) return .left;
+    if (key.matches('j', .{}) and document.mode == .normal) return .down;
+    if (key.matches('k', .{}) and document.mode == .normal) return .up;
+    if (key.matches('l', .{}) and document.mode == .normal) return .right;
+
+    // MODES
+    if (key.matches('i', .{}) and document.mode == .normal) return .insert;
+    if (key.matches('I', .{}) and document.mode == .normal) return .insert;
+    if (key.matches('a', .{}) and document.mode == .normal) return .insert;
+    if (key.matches('A', .{}) and document.mode == .normal) return .insert;
+
+    if (key.matches('r', .{}) and document.mode == .normal) return .replace;
+    if (key.matches('R', .{}) and document.mode == .normal) return .replace;
+
+    if (key.matches('v', .{}) and document.mode == .normal) return .visual;
+    if (key.matches('V', .{}) and document.mode == .normal) return .visual;
+
+    if (key.matches(vaxis.Key.escape, .{}) and document.mode != .normal) return .normal;
+
+    // ARROWS
     return switch (key.codepoint) {
         vaxis.Key.left => .left,
         vaxis.Key.right => .right,
@@ -90,43 +148,43 @@ fn commandFromKey(key: vaxis.Key) Command {
     };
 }
 
-fn clampCursorX(ed: *editor.Editor) void {
-    const row = ed.currentRow() orelse {
-        ed.cursor_x = 0;
+fn clampCursorX(document: *editor.Editor) void {
+    const row = document.currentRow() orelse {
+        document.cursor_x = 0;
         return;
     };
 
     if (row.chars.len == 0) {
-        ed.cursor_x = 0;
-    } else if (ed.cursor_x >= row.chars.len) {
-        ed.cursor_x = row.chars.len - 1;
+        document.cursor_x = 0;
+    } else if (document.cursor_x >= row.chars.len) {
+        document.cursor_x = row.chars.len - 1;
     }
 }
 
 test "alt-q quits" {
-    var ed: editor.Editor = .{};
+    var document: editor.Editor = .{};
     var state: State = .{};
     const key: vaxis.Key = .{ .codepoint = 'q', .mods = .{ .alt = true } };
 
-    try std.testing.expect(handleKey(key, &ed, &state));
+    try std.testing.expect(handleKey(key, &document, &state));
 }
 
 test "gg and G move to document boundaries" {
     const allocator = std.testing.allocator;
-    var ed: editor.Editor = .{};
-    defer ed.deinit(allocator);
+    var document: editor.Editor = .{};
+    defer document.deinit(allocator);
     var state: State = .{};
 
-    try ed.appendRow(allocator, "first");
-    try ed.appendRow(allocator, "second");
-    try ed.appendRow(allocator, "third");
+    try document.appendRow(allocator, "first");
+    try document.appendRow(allocator, "second");
+    try document.appendRow(allocator, "third");
 
-    try std.testing.expect(!handleKey(.{ .codepoint = 'G' }, &ed, &state));
-    try std.testing.expectEqual(@as(usize, 2), ed.cursor_y);
+    try std.testing.expect(!handleKey(.{ .codepoint = 'G' }, &document, &state));
+    try std.testing.expectEqual(@as(usize, 2), document.cursor_y);
 
-    try std.testing.expect(!handleKey(.{ .codepoint = 'g' }, &ed, &state));
+    try std.testing.expect(!handleKey(.{ .codepoint = 'g' }, &document, &state));
     try std.testing.expect(state.pending_g);
-    try std.testing.expect(!handleKey(.{ .codepoint = 'g' }, &ed, &state));
-    try std.testing.expectEqual(@as(usize, 0), ed.cursor_y);
+    try std.testing.expect(!handleKey(.{ .codepoint = 'g' }, &document, &state));
+    try std.testing.expectEqual(@as(usize, 0), document.cursor_y);
     try std.testing.expect(!state.pending_g);
 }

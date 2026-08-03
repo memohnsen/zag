@@ -14,8 +14,8 @@ pub fn main(init: std.process.Init) !void {
     const io = init.io;
     const gpa = init.gpa;
 
-    var ed = editor.Editor{};
-    defer ed.deinit(gpa);
+    var document = editor.Editor{};
+    defer document.deinit(gpa);
 
     // Get args and skip the first
     const args = init.minimal.args;
@@ -30,7 +30,7 @@ pub fn main(init: std.process.Init) !void {
 
         // Must duplicate this since the iter owns the original filename
         const stored_filename = try gpa.dupe(u8, filename);
-        ed.filename = stored_filename;
+        document.filename = stored_filename;
 
         // Create a buffer to store contents, alloc the remaining, then append to view
         var buf: [4096]u8 = undefined;
@@ -42,7 +42,7 @@ pub fn main(init: std.process.Init) !void {
 
         while (rows.next()) |row| {
             const trimmed = std.mem.trimEnd(u8, row, "\r");
-            try ed.appendRow(gpa, trimmed);
+            try document.appendRow(gpa, trimmed);
         }
     }
 
@@ -68,7 +68,7 @@ pub fn main(init: std.process.Init) !void {
         const event = try event_loop.nextEvent();
         switch (event) {
             .key_press => |key| {
-                if (commands.handleKey(key, &ed, &command_state)) break;
+                if (commands.handleKey(key, &document, &command_state)) break;
             },
             .winsize => |size| {
                 try vx.resize(gpa, tty.writer(), size);
@@ -76,7 +76,8 @@ pub fn main(init: std.process.Init) !void {
         }
 
         const window = vx.window();
-        ed.scroll(window.height, window.width);
-        try ui.refresh(&vx, tty.writer(), &ed);
+        const text_height = window.height -| 1;
+        document.scroll(text_height, window.width);
+        try ui.refresh(&vx, tty.writer(), &document);
     }
 }
