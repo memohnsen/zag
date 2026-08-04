@@ -1,4 +1,5 @@
 const std = @import("std");
+const log = std.log;
 
 const vaxis = @import("vaxis");
 const ui = @import("ui.zig");
@@ -10,7 +11,14 @@ const Event = union(enum) {
     winsize: vaxis.Winsize,
 };
 
-pub fn main(init: std.process.Init) !void {
+pub fn main(init: std.process.Init) void {
+    run(init) catch |err| {
+        log.err("Zag failed to init: {}", .{err});
+        std.process.exit(1);
+    };
+}
+
+fn run(init: std.process.Init) !void {
     const io = init.io;
     const gpa = init.gpa;
 
@@ -19,32 +27,7 @@ pub fn main(init: std.process.Init) !void {
 
     // Get args and skip the first
     const args = init.minimal.args;
-    var iter = try args.iterateAllocator(gpa);
-    defer iter.deinit();
-    _ = iter.skip();
-
-    if (iter.next()) |filename| {
-        const cwd = std.Io.Dir.cwd();
-        const file = try cwd.openFile(io, filename, .{});
-        defer file.close(io);
-
-        // Must duplicate this since the iter owns the original filename
-        const stored_filename = try gpa.dupe(u8, filename);
-        document.filename = stored_filename;
-
-        // Create a buffer to store contents, alloc the remaining, then append to view
-        var buf: [4096]u8 = undefined;
-        var reader = file.reader(io, &buf);
-        const contents = try reader.interface.allocRemaining(gpa, .limited(10 * 1024 * 1024));
-        defer gpa.free(contents);
-
-        var rows = std.mem.splitScalar(u8, contents, '\n');
-
-        while (rows.next()) |row| {
-            const trimmed = std.mem.trimEnd(u8, row, "\r");
-            try document.appendRow(gpa, trimmed);
-        }
-    }
+    try handleArgs(args, gpa, io, &document);
 
     // Set up vaxis and the terminal
     var tty_buffer: [1024]u8 = undefined;
@@ -79,6 +62,55 @@ pub fn main(init: std.process.Init) !void {
         const text_height = window.height -| 1;
         document.scroll(text_height, window.width);
         try ui.refresh(&vx, tty.writer(), &document);
+    }
+}
+
+fn handleArgs(
+    args: std.process.Args,
+    gpa: std.mem.Allocator,
+    io: std.Io,
+    document: *editor.Editor,
+) !void {
+    var iter = args.iterateAllocator(gpa) catch |err| {
+        log.err("Failed to alloc args: {}", .{err});
+        return err;
+    };
+    defer iter.deinit();
+    _ = iter.skip();
+
+    if (iter.next()) |filename| {
+        const cwd = std.Io.Dir.cwd();
+        const file = cwd.openFile(io, filename, .{}) catch |err| {
+            log.err("Failed to load file '{s}': {}", .{ filename, err });
+            return err;
+        };
+        defer file.close(io);
+
+        // Must duplicate this since the iter owns the original filename
+        const stored_filename = gpa.dupe(u8, filename) catch |err| {
+            log.err("Failed to duplicate file name: {}", .{err});
+            return err;
+        };
+        document.filename = stored_filename;
+
+        // Create a buffer to store contents, alloc the remaining, then append to view
+        var buf: [4096]u8 = undefined;
+        var reader = file.reader(io, &buf);
+        const contents = reader.interface.allocRemaining(gpa, .limited(10 * 1024 * 1024)) catch |err| {
+            log.err("Failed to alloc remaining space for contents: {}", .{err});
+            return err;
+        };
+        defer gpa.free(contents);
+
+        var rows = std.mem.splitScalar(u8, contents, '\n');
+
+        while (rows.next()) |row| {
+            const trimmed = std.mem.trimEnd(u8, row, "\r");
+            document.appendRow(gpa, trimmed) catch |err| {
+                log.err("Failed to append file rows: {}", .{err});
+                return err;
+            };
+        }
     }
 }
 
