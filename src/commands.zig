@@ -1,6 +1,7 @@
 const std = @import("std");
-const vaxis = @import("vaxis");
+const testing = std.testing;
 
+const vaxis = @import("vaxis");
 const editor = @import("editor.zig");
 
 pub const State = struct {
@@ -151,11 +152,11 @@ test "ctrl-q quits" {
     var state: State = .{};
     const key: vaxis.Key = .{ .codepoint = 'q', .mods = .{ .ctrl = true } };
 
-    try std.testing.expect(handleKey(key, &document, &state));
+    try testing.expect(handleKey(key, &document, &state));
 }
 
 test "cursor clamps at final char in row when changing lines" {
-    const allocator = std.testing.allocator;
+    const allocator = testing.allocator;
     var document: editor.Editor = .{};
     defer document.deinit(allocator);
     var state: State = .{};
@@ -165,11 +166,11 @@ test "cursor clamps at final char in row when changing lines" {
 
     document.cursor_x = 18;
     _ = handleKey(.{ .codepoint = 'j' }, &document, &state);
-    try std.testing.expect(document.cursor_x == 4);
+    try testing.expect(document.cursor_x == 4);
 }
 
 test "gg and G move to document boundaries" {
-    const allocator = std.testing.allocator;
+    const allocator = testing.allocator;
     var document: editor.Editor = .{};
     defer document.deinit(allocator);
     var state: State = .{};
@@ -178,18 +179,18 @@ test "gg and G move to document boundaries" {
     try document.appendRow(allocator, "second");
     try document.appendRow(allocator, "third");
 
-    try std.testing.expect(!handleKey(.{ .codepoint = 'G' }, &document, &state));
-    try std.testing.expectEqual(@as(usize, 2), document.cursor_y);
+    try testing.expect(!handleKey(.{ .codepoint = 'G' }, &document, &state));
+    try testing.expectEqual(@as(usize, 2), document.cursor_y);
 
-    try std.testing.expect(!handleKey(.{ .codepoint = 'g' }, &document, &state));
-    try std.testing.expect(state.pending_g);
-    try std.testing.expect(!handleKey(.{ .codepoint = 'g' }, &document, &state));
-    try std.testing.expectEqual(@as(usize, 0), document.cursor_y);
-    try std.testing.expect(!state.pending_g);
+    try testing.expect(!handleKey(.{ .codepoint = 'g' }, &document, &state));
+    try testing.expect(state.pending_g);
+    try testing.expect(!handleKey(.{ .codepoint = 'g' }, &document, &state));
+    try testing.expectEqual(@as(usize, 0), document.cursor_y);
+    try testing.expect(!state.pending_g);
 }
 
 test "0 and gh move to line start" {
-    const allocator = std.testing.allocator;
+    const allocator = testing.allocator;
     var document: editor.Editor = .{};
     defer document.deinit(allocator);
     var state: State = .{};
@@ -197,36 +198,36 @@ test "0 and gh move to line start" {
     try document.appendRow(allocator, "first");
 
     document.cursor_x = 3;
-    try std.testing.expect(!handleKey(.{ .codepoint = '0' }, &document, &state));
-    try std.testing.expectEqual(@as(usize, 0), document.cursor_x);
+    try testing.expect(!handleKey(.{ .codepoint = '0' }, &document, &state));
+    try testing.expectEqual(@as(usize, 0), document.cursor_x);
 
     document.cursor_x = 3;
-    try std.testing.expect(!handleKey(.{ .codepoint = 'g' }, &document, &state));
-    try std.testing.expect(state.pending_g);
-    try std.testing.expect(!handleKey(.{ .codepoint = 'h' }, &document, &state));
-    try std.testing.expectEqual(@as(usize, 0), document.cursor_x);
+    try testing.expect(!handleKey(.{ .codepoint = 'g' }, &document, &state));
+    try testing.expect(state.pending_g);
+    try testing.expect(!handleKey(.{ .codepoint = 'h' }, &document, &state));
+    try testing.expectEqual(@as(usize, 0), document.cursor_x);
 }
 
 test "$ and gl move to line end" {
-    const allocator = std.testing.allocator;
+    const allocator = testing.allocator;
     var document: editor.Editor = .{};
     defer document.deinit(allocator);
     var state: State = .{};
 
     try document.appendRow(allocator, "first");
 
-    try std.testing.expect(!handleKey(.{ .codepoint = '$' }, &document, &state));
-    try std.testing.expectEqual(@as(usize, 4), document.cursor_x);
+    try testing.expect(!handleKey(.{ .codepoint = '$' }, &document, &state));
+    try testing.expectEqual(@as(usize, 4), document.cursor_x);
 
     document.cursor_x = 0;
-    try std.testing.expect(!handleKey(.{ .codepoint = 'g' }, &document, &state));
-    try std.testing.expect(state.pending_g);
-    try std.testing.expect(!handleKey(.{ .codepoint = 'l' }, &document, &state));
-    try std.testing.expectEqual(@as(usize, 4), document.cursor_x);
+    try testing.expect(!handleKey(.{ .codepoint = 'g' }, &document, &state));
+    try testing.expect(state.pending_g);
+    try testing.expect(!handleKey(.{ .codepoint = 'l' }, &document, &state));
+    try testing.expectEqual(@as(usize, 4), document.cursor_x);
 }
 
 test "hjkl work for movement in normal mode" {
-    const allocator = std.testing.allocator;
+    const allocator = testing.allocator;
     var document: editor.Editor = .{};
     defer document.deinit(allocator);
     var state: State = .{};
@@ -235,29 +236,29 @@ test "hjkl work for movement in normal mode" {
     try document.appendRow(allocator, "second");
     try document.appendRow(allocator, "third");
 
-    try std.testing.expect(document.mode == .normal);
-    try std.testing.expect(!handleKey(.{ .codepoint = 'l' }, &document, &state));
-    try std.testing.expectEqual(@as(usize, 1), document.cursor_x);
-    try std.testing.expect(!handleKey(.{ .codepoint = 'h' }, &document, &state));
-    try std.testing.expectEqual(@as(usize, 0), document.cursor_x);
-    try std.testing.expect(!handleKey(.{ .codepoint = 'j' }, &document, &state));
-    try std.testing.expectEqual(@as(usize, 1), document.cursor_y);
-    try std.testing.expect(!handleKey(.{ .codepoint = 'k' }, &document, &state));
-    try std.testing.expectEqual(@as(usize, 0), document.cursor_y);
+    try testing.expect(document.mode == .normal);
+    try testing.expect(!handleKey(.{ .codepoint = 'l' }, &document, &state));
+    try testing.expectEqual(@as(usize, 1), document.cursor_x);
+    try testing.expect(!handleKey(.{ .codepoint = 'h' }, &document, &state));
+    try testing.expectEqual(@as(usize, 0), document.cursor_x);
+    try testing.expect(!handleKey(.{ .codepoint = 'j' }, &document, &state));
+    try testing.expectEqual(@as(usize, 1), document.cursor_y);
+    try testing.expect(!handleKey(.{ .codepoint = 'k' }, &document, &state));
+    try testing.expectEqual(@as(usize, 0), document.cursor_y);
 
     document.mode = .insert;
-    try std.testing.expect(!handleKey(.{ .codepoint = 'l' }, &document, &state));
-    try std.testing.expectEqual(@as(usize, 0), document.cursor_x);
-    try std.testing.expect(!handleKey(.{ .codepoint = 'h' }, &document, &state));
-    try std.testing.expectEqual(@as(usize, 0), document.cursor_x);
-    try std.testing.expect(!handleKey(.{ .codepoint = 'j' }, &document, &state));
-    try std.testing.expectEqual(@as(usize, 0), document.cursor_y);
-    try std.testing.expect(!handleKey(.{ .codepoint = 'k' }, &document, &state));
-    try std.testing.expectEqual(@as(usize, 0), document.cursor_y);
+    try testing.expect(!handleKey(.{ .codepoint = 'l' }, &document, &state));
+    try testing.expectEqual(@as(usize, 0), document.cursor_x);
+    try testing.expect(!handleKey(.{ .codepoint = 'h' }, &document, &state));
+    try testing.expectEqual(@as(usize, 0), document.cursor_x);
+    try testing.expect(!handleKey(.{ .codepoint = 'j' }, &document, &state));
+    try testing.expectEqual(@as(usize, 0), document.cursor_y);
+    try testing.expect(!handleKey(.{ .codepoint = 'k' }, &document, &state));
+    try testing.expectEqual(@as(usize, 0), document.cursor_y);
 }
 
 test "arrows work for movement in all modes" {
-    const allocator = std.testing.allocator;
+    const allocator = testing.allocator;
     var document: editor.Editor = .{};
     defer document.deinit(allocator);
     var state: State = .{};
@@ -266,59 +267,59 @@ test "arrows work for movement in all modes" {
     try document.appendRow(allocator, "second");
     try document.appendRow(allocator, "third");
 
-    try std.testing.expect(document.mode == .normal);
-    try std.testing.expect(!handleKey(.{ .codepoint = vaxis.Key.right }, &document, &state));
-    try std.testing.expectEqual(@as(usize, 1), document.cursor_x);
-    try std.testing.expect(!handleKey(.{ .codepoint = vaxis.Key.left }, &document, &state));
-    try std.testing.expectEqual(@as(usize, 0), document.cursor_x);
-    try std.testing.expect(!handleKey(.{ .codepoint = vaxis.Key.down }, &document, &state));
-    try std.testing.expectEqual(@as(usize, 1), document.cursor_y);
-    try std.testing.expect(!handleKey(.{ .codepoint = vaxis.Key.up }, &document, &state));
-    try std.testing.expectEqual(@as(usize, 0), document.cursor_y);
+    try testing.expect(document.mode == .normal);
+    try testing.expect(!handleKey(.{ .codepoint = vaxis.Key.right }, &document, &state));
+    try testing.expectEqual(@as(usize, 1), document.cursor_x);
+    try testing.expect(!handleKey(.{ .codepoint = vaxis.Key.left }, &document, &state));
+    try testing.expectEqual(@as(usize, 0), document.cursor_x);
+    try testing.expect(!handleKey(.{ .codepoint = vaxis.Key.down }, &document, &state));
+    try testing.expectEqual(@as(usize, 1), document.cursor_y);
+    try testing.expect(!handleKey(.{ .codepoint = vaxis.Key.up }, &document, &state));
+    try testing.expectEqual(@as(usize, 0), document.cursor_y);
 
     document.mode = .insert;
-    try std.testing.expect(!handleKey(.{ .codepoint = vaxis.Key.right }, &document, &state));
-    try std.testing.expectEqual(@as(usize, 1), document.cursor_x);
-    try std.testing.expect(!handleKey(.{ .codepoint = vaxis.Key.left }, &document, &state));
-    try std.testing.expectEqual(@as(usize, 0), document.cursor_x);
-    try std.testing.expect(!handleKey(.{ .codepoint = vaxis.Key.down }, &document, &state));
-    try std.testing.expectEqual(@as(usize, 1), document.cursor_y);
-    try std.testing.expect(!handleKey(.{ .codepoint = vaxis.Key.up }, &document, &state));
-    try std.testing.expectEqual(@as(usize, 0), document.cursor_y);
+    try testing.expect(!handleKey(.{ .codepoint = vaxis.Key.right }, &document, &state));
+    try testing.expectEqual(@as(usize, 1), document.cursor_x);
+    try testing.expect(!handleKey(.{ .codepoint = vaxis.Key.left }, &document, &state));
+    try testing.expectEqual(@as(usize, 0), document.cursor_x);
+    try testing.expect(!handleKey(.{ .codepoint = vaxis.Key.down }, &document, &state));
+    try testing.expectEqual(@as(usize, 1), document.cursor_y);
+    try testing.expect(!handleKey(.{ .codepoint = vaxis.Key.up }, &document, &state));
+    try testing.expectEqual(@as(usize, 0), document.cursor_y);
 
     document.mode = .visual;
-    try std.testing.expect(!handleKey(.{ .codepoint = vaxis.Key.right }, &document, &state));
-    try std.testing.expectEqual(@as(usize, 1), document.cursor_x);
-    try std.testing.expect(!handleKey(.{ .codepoint = vaxis.Key.left }, &document, &state));
-    try std.testing.expectEqual(@as(usize, 0), document.cursor_x);
-    try std.testing.expect(!handleKey(.{ .codepoint = vaxis.Key.down }, &document, &state));
-    try std.testing.expectEqual(@as(usize, 1), document.cursor_y);
-    try std.testing.expect(!handleKey(.{ .codepoint = vaxis.Key.up }, &document, &state));
-    try std.testing.expectEqual(@as(usize, 0), document.cursor_y);
+    try testing.expect(!handleKey(.{ .codepoint = vaxis.Key.right }, &document, &state));
+    try testing.expectEqual(@as(usize, 1), document.cursor_x);
+    try testing.expect(!handleKey(.{ .codepoint = vaxis.Key.left }, &document, &state));
+    try testing.expectEqual(@as(usize, 0), document.cursor_x);
+    try testing.expect(!handleKey(.{ .codepoint = vaxis.Key.down }, &document, &state));
+    try testing.expectEqual(@as(usize, 1), document.cursor_y);
+    try testing.expect(!handleKey(.{ .codepoint = vaxis.Key.up }, &document, &state));
+    try testing.expectEqual(@as(usize, 0), document.cursor_y);
 
     document.mode = .replace;
-    try std.testing.expect(!handleKey(.{ .codepoint = vaxis.Key.right }, &document, &state));
-    try std.testing.expectEqual(@as(usize, 1), document.cursor_x);
-    try std.testing.expect(!handleKey(.{ .codepoint = vaxis.Key.left }, &document, &state));
-    try std.testing.expectEqual(@as(usize, 0), document.cursor_x);
-    try std.testing.expect(!handleKey(.{ .codepoint = vaxis.Key.down }, &document, &state));
-    try std.testing.expectEqual(@as(usize, 1), document.cursor_y);
-    try std.testing.expect(!handleKey(.{ .codepoint = vaxis.Key.up }, &document, &state));
-    try std.testing.expectEqual(@as(usize, 0), document.cursor_y);
+    try testing.expect(!handleKey(.{ .codepoint = vaxis.Key.right }, &document, &state));
+    try testing.expectEqual(@as(usize, 1), document.cursor_x);
+    try testing.expect(!handleKey(.{ .codepoint = vaxis.Key.left }, &document, &state));
+    try testing.expectEqual(@as(usize, 0), document.cursor_x);
+    try testing.expect(!handleKey(.{ .codepoint = vaxis.Key.down }, &document, &state));
+    try testing.expectEqual(@as(usize, 1), document.cursor_y);
+    try testing.expect(!handleKey(.{ .codepoint = vaxis.Key.up }, &document, &state));
+    try testing.expectEqual(@as(usize, 0), document.cursor_y);
 
     document.mode = .command;
-    try std.testing.expect(!handleKey(.{ .codepoint = vaxis.Key.right }, &document, &state));
-    try std.testing.expectEqual(@as(usize, 1), document.cursor_x);
-    try std.testing.expect(!handleKey(.{ .codepoint = vaxis.Key.left }, &document, &state));
-    try std.testing.expectEqual(@as(usize, 0), document.cursor_x);
-    try std.testing.expect(!handleKey(.{ .codepoint = vaxis.Key.down }, &document, &state));
-    try std.testing.expectEqual(@as(usize, 1), document.cursor_y);
-    try std.testing.expect(!handleKey(.{ .codepoint = vaxis.Key.up }, &document, &state));
-    try std.testing.expectEqual(@as(usize, 0), document.cursor_y);
+    try testing.expect(!handleKey(.{ .codepoint = vaxis.Key.right }, &document, &state));
+    try testing.expectEqual(@as(usize, 1), document.cursor_x);
+    try testing.expect(!handleKey(.{ .codepoint = vaxis.Key.left }, &document, &state));
+    try testing.expectEqual(@as(usize, 0), document.cursor_x);
+    try testing.expect(!handleKey(.{ .codepoint = vaxis.Key.down }, &document, &state));
+    try testing.expectEqual(@as(usize, 1), document.cursor_y);
+    try testing.expect(!handleKey(.{ .codepoint = vaxis.Key.up }, &document, &state));
+    try testing.expectEqual(@as(usize, 0), document.cursor_y);
 }
 
 test "modes change" {
-    const allocator = std.testing.allocator;
+    const allocator = testing.allocator;
     var document: editor.Editor = .{};
     defer document.deinit(allocator);
     var state: State = .{};
@@ -327,28 +328,28 @@ test "modes change" {
     try document.appendRow(allocator, "second");
     try document.appendRow(allocator, "third");
 
-    try std.testing.expect(document.mode == .normal);
-    try std.testing.expect(!handleKey(.{ .codepoint = 'i' }, &document, &state));
-    try std.testing.expect(document.mode == .insert);
-    try std.testing.expect(!handleKey(.{ .codepoint = vaxis.Key.escape }, &document, &state));
-    try std.testing.expect(!handleKey(.{ .codepoint = 'a' }, &document, &state));
-    try std.testing.expect(document.mode == .insert);
+    try testing.expect(document.mode == .normal);
+    try testing.expect(!handleKey(.{ .codepoint = 'i' }, &document, &state));
+    try testing.expect(document.mode == .insert);
+    try testing.expect(!handleKey(.{ .codepoint = vaxis.Key.escape }, &document, &state));
+    try testing.expect(!handleKey(.{ .codepoint = 'a' }, &document, &state));
+    try testing.expect(document.mode == .insert);
 
-    try std.testing.expect(!handleKey(.{ .codepoint = vaxis.Key.escape }, &document, &state));
-    try std.testing.expect(document.mode == .normal);
-    try std.testing.expect(!handleKey(.{ .codepoint = 'r' }, &document, &state));
-    try std.testing.expect(document.mode == .replace);
-    try std.testing.expect(!handleKey(.{ .codepoint = vaxis.Key.escape }, &document, &state));
-    try std.testing.expect(document.mode == .normal);
-    try std.testing.expect(!handleKey(.{ .codepoint = 'R' }, &document, &state));
-    try std.testing.expect(document.mode == .replace);
+    try testing.expect(!handleKey(.{ .codepoint = vaxis.Key.escape }, &document, &state));
+    try testing.expect(document.mode == .normal);
+    try testing.expect(!handleKey(.{ .codepoint = 'r' }, &document, &state));
+    try testing.expect(document.mode == .replace);
+    try testing.expect(!handleKey(.{ .codepoint = vaxis.Key.escape }, &document, &state));
+    try testing.expect(document.mode == .normal);
+    try testing.expect(!handleKey(.{ .codepoint = 'R' }, &document, &state));
+    try testing.expect(document.mode == .replace);
 
-    try std.testing.expect(!handleKey(.{ .codepoint = vaxis.Key.escape }, &document, &state));
-    try std.testing.expect(document.mode == .normal);
-    try std.testing.expect(!handleKey(.{ .codepoint = 'v' }, &document, &state));
-    try std.testing.expect(document.mode == .visual);
-    try std.testing.expect(!handleKey(.{ .codepoint = vaxis.Key.escape }, &document, &state));
-    try std.testing.expect(document.mode == .normal);
-    try std.testing.expect(!handleKey(.{ .codepoint = 'V' }, &document, &state));
-    try std.testing.expect(document.mode == .visual);
+    try testing.expect(!handleKey(.{ .codepoint = vaxis.Key.escape }, &document, &state));
+    try testing.expect(document.mode == .normal);
+    try testing.expect(!handleKey(.{ .codepoint = 'v' }, &document, &state));
+    try testing.expect(document.mode == .visual);
+    try testing.expect(!handleKey(.{ .codepoint = vaxis.Key.escape }, &document, &state));
+    try testing.expect(document.mode == .normal);
+    try testing.expect(!handleKey(.{ .codepoint = 'V' }, &document, &state));
+    try testing.expect(document.mode == .visual);
 }

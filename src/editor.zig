@@ -1,15 +1,17 @@
 const std = @import("std");
+const mem = std.mem;
+const testing = std.testing;
 
 pub const Row = struct {
     chars: std.ArrayList(u8) = .empty,
 
-    pub fn deinit(self: *Row, allocator: std.mem.Allocator) void {
+    pub fn deinit(self: *Row, allocator: mem.Allocator) void {
         self.chars.deinit(allocator);
     }
 
     pub fn insertText(
         self: *Row,
-        allocator: std.mem.Allocator,
+        allocator: mem.Allocator,
         index: usize,
         text: []const u8,
     ) !void {
@@ -45,7 +47,7 @@ pub const Editor = struct {
     filename: ?[]u8 = null,
     mode: Mode = .normal,
 
-    pub fn deinit(self: *Editor, allocator: std.mem.Allocator) void {
+    pub fn deinit(self: *Editor, allocator: mem.Allocator) void {
         for (self.rows.items) |*row| {
             Row.deinit(row, allocator);
         }
@@ -57,7 +59,7 @@ pub const Editor = struct {
         }
     }
 
-    pub fn appendRow(self: *Editor, allocator: std.mem.Allocator, input: []const u8) !void {
+    pub fn appendRow(self: *Editor, allocator: mem.Allocator, input: []const u8) !void {
         var row_list: std.ArrayList(u8) = .empty;
         errdefer row_list.deinit(allocator);
         try row_list.appendSlice(allocator, input);
@@ -66,7 +68,7 @@ pub const Editor = struct {
         try self.rows.append(allocator, row);
     }
 
-    pub fn insertText(self: *Editor, allocator: std.mem.Allocator, input: []const u8) !void {
+    pub fn insertText(self: *Editor, allocator: mem.Allocator, input: []const u8) !void {
         if (self.rows.items.len == 0) {
             try self.appendRow(allocator, "");
         }
@@ -102,31 +104,31 @@ pub const Editor = struct {
 };
 
 test "appending rows" {
-    const allocator = std.testing.allocator;
+    const allocator = testing.allocator;
     var document = Editor{};
     defer document.deinit(allocator);
 
-    try std.testing.expectEqual(@as(usize, 0), document.rows.items.len);
+    try testing.expectEqual(@as(usize, 0), document.rows.items.len);
     try document.appendRow(allocator, "Hello");
-    try std.testing.expectEqual(@as(usize, 1), document.rows.items.len);
-    try std.testing.expectEqualStrings("Hello", document.rows.items[0].chars.items);
+    try testing.expectEqual(@as(usize, 1), document.rows.items.len);
+    try testing.expectEqualStrings("Hello", document.rows.items[0].chars.items);
 }
 
 test "inserting rows" {
     var document = Editor{};
-    const allocator = std.testing.allocator;
+    const allocator = testing.allocator;
     defer document.deinit(allocator);
 
     try document.appendRow(allocator, "Hello");
     try document.insertText(allocator, "r");
     const row = document.currentRow().?;
 
-    try std.testing.expectEqualStrings("rHello", row.chars.items);
-    try std.testing.expect(document.cursor_x == 1);
+    try testing.expectEqualStrings("rHello", row.chars.items);
+    try testing.expect(document.cursor_x == 1);
 }
 
 test "get current row" {
-    const allocator = std.testing.allocator;
+    const allocator = testing.allocator;
     var document = Editor{};
     defer document.deinit(allocator);
 
@@ -136,31 +138,31 @@ test "get current row" {
     document.cursor_y = 2;
 
     const row = document.currentRow() orelse return error.TestExpectedEqual;
-    try std.testing.expectEqualStrings("two", row.chars.items);
+    try testing.expectEqualStrings("two", row.chars.items);
 }
 
 test "Mode fmt prints string" {
     var document = Editor{};
     document.mode = .normal;
-    try std.testing.expect(std.mem.eql(u8, document.mode.fmt(), "NORMAL"));
+    try testing.expect(mem.eql(u8, document.mode.fmt(), "NORMAL"));
     document.mode = .insert;
-    try std.testing.expect(std.mem.eql(u8, document.mode.fmt(), "INSERT"));
+    try testing.expect(mem.eql(u8, document.mode.fmt(), "INSERT"));
     document.mode = .replace;
-    try std.testing.expect(std.mem.eql(u8, document.mode.fmt(), "REPLACE"));
+    try testing.expect(mem.eql(u8, document.mode.fmt(), "REPLACE"));
     document.mode = .visual;
-    try std.testing.expect(std.mem.eql(u8, document.mode.fmt(), "VISUAL"));
+    try testing.expect(mem.eql(u8, document.mode.fmt(), "VISUAL"));
     document.mode = .command;
-    try std.testing.expect(std.mem.eql(u8, document.mode.fmt(), "COMMAND"));
+    try testing.expect(mem.eql(u8, document.mode.fmt(), "COMMAND"));
 }
 
 test "text inserts into row" {
     var document = Editor{};
-    const allocator = std.testing.allocator;
+    const allocator = testing.allocator;
     defer document.deinit(allocator);
 
     try document.appendRow(allocator, "Hello");
     const row = document.currentRow().?;
     try row.insertText(allocator, 0, "r");
 
-    try std.testing.expectEqualStrings(row.chars.items, "rHello");
+    try testing.expectEqualStrings(row.chars.items, "rHello");
 }
