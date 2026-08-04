@@ -46,7 +46,7 @@ pub fn handleKey(key: vaxis.Key, document: *editor.Editor, state: *State) bool {
         },
         .right => {
             if (document.currentRow()) |row| {
-                if (document.cursor_x + 1 < row.chars.len) document.cursor_x += 1;
+                if (document.cursor_x + 1 < row.chars.items.len) document.cursor_x += 1;
             }
         },
         .up => {
@@ -72,7 +72,7 @@ pub fn handleKey(key: vaxis.Key, document: *editor.Editor, state: *State) bool {
         },
         .line_end => {
             if (document.currentRow()) |row| {
-                document.cursor_x = if (row.chars.len == 0) 0 else row.chars.len - 1;
+                document.cursor_x = if (row.chars.items.len == 0) 0 else row.chars.items.len - 1;
             } else {
                 document.cursor_x = 0;
             }
@@ -139,10 +139,10 @@ fn clampCursorX(document: *editor.Editor) void {
         return;
     };
 
-    if (row.chars.len == 0) {
+    if (row.chars.items.len == 0) {
         document.cursor_x = 0;
-    } else if (document.cursor_x >= row.chars.len) {
-        document.cursor_x = row.chars.len - 1;
+    } else if (document.cursor_x >= row.chars.items.len) {
+        document.cursor_x = row.chars.items.len - 1;
     }
 }
 
@@ -152,6 +152,20 @@ test "ctrl-q quits" {
     const key: vaxis.Key = .{ .codepoint = 'q', .mods = .{ .ctrl = true } };
 
     try std.testing.expect(handleKey(key, &document, &state));
+}
+
+test "cursor clamps at final char in row when changing lines" {
+    const allocator = std.testing.allocator;
+    var document: editor.Editor = .{};
+    defer document.deinit(allocator);
+    var state: State = .{};
+
+    try document.appendRow(allocator, "this is a long line");
+    try document.appendRow(allocator, "short");
+
+    document.cursor_x = 18;
+    _ = handleKey(.{ .codepoint = 'j' }, &document, &state);
+    try std.testing.expect(document.cursor_x == 4);
 }
 
 test "gg and G move to document boundaries" {

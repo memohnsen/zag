@@ -31,7 +31,7 @@ fn drawRows(window: vaxis.Window, document: *const editor.Editor) void {
         const file_row = document.row_offset + screen_row;
 
         if (file_row < document.rows.items.len) {
-            const chars = document.rows.items[file_row].chars;
+            const chars = document.rows.items[file_row].chars.items;
             const start = @min(document.col_offset, chars.len);
             printAt(window, chars[start..], screen_row, 0);
             continue;
@@ -58,7 +58,6 @@ fn drawStatusBar(
     const status_window = window.child(.{ .y_off = @intCast(window.height -| 1), .height = 1 });
     status_window.fill(.{ .style = .{ .reverse = true } });
 
-    // TODO: add modes later. Insert, Normal, Visual, Replace, Command
     // Show filename and lines in file
     const file: []const u8 = if (document.filename) |name| name else "[No File]";
     const mode = document.mode.fmt();
