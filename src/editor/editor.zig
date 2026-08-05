@@ -46,7 +46,6 @@ pub const Editor = struct {
         if (index < self.rows.items.len) {
             var row = self.rows.orderedRemove(index);
             row.deinit(allocator);
-            self.cursor_y = self.cursor_y -| 1;
         }
     }
 
@@ -62,11 +61,12 @@ pub const Editor = struct {
             try prev_row.insertText(allocator, prev_row_length, current_row_text);
             try self.removeRow(allocator, self.cursor_y);
             self.cursor_x = prev_row_length;
+            self.cursor_y = self.cursor_y -| 1;
         }
     }
 
     pub fn joinWithNextRow(self: *Editor, allocator: mem.Allocator) !void {
-        if (self.cursor_y == self.rows.items.len) {
+        if (self.cursor_y + 1 == self.rows.items.len) {
             return;
         }
 

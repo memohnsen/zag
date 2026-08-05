@@ -171,13 +171,16 @@ pub fn handleKey(
                 if (document.cursor_x < row.chars.items.len) {
                     row.removeByte(document.cursor_x);
                 }
-            } else {
-                try document.joinWithNextRow(allocator);
             }
         },
         .delete_line => {
             if (pending_d) {
                 try document.removeRow(allocator, document.cursor_y);
+                if (document.rows.items.len == 0) {
+                    document.cursor_y = 0;
+                } else if (document.cursor_y >= document.rows.items.len) {
+                    document.cursor_y = document.cursor_y -| 1;
+                }
                 state.pending_d = false;
             } else {
                 state.pending_d = true;
@@ -669,7 +672,19 @@ test "removing line with dd" {
     try testing.expect(!(try handleKey(.{ .codepoint = 'd' }, &document, &state, allocator)));
     try testing.expect(!(try handleKey(.{ .codepoint = 'd' }, &document, &state, allocator)));
     try testing.expect(document.rows.items.len == 1);
+    try testing.expect(document.cursor_y == 0);
     try testing.expectEqualStrings("hello", document.rows.items[0].chars.items);
+
+    try document.appendRow(allocator, "world");
+    try document.appendRow(allocator, "world");
+    try testing.expectEqualStrings("hello", document.rows.items[0].chars.items);
+    try testing.expectEqualStrings("world", document.rows.items[1].chars.items);
+    try testing.expectEqualStrings("world", document.rows.items[2].chars.items);
+    document.cursor_y = 1;
+    try testing.expect(!(try handleKey(.{ .codepoint = 'd' }, &document, &state, allocator)));
+    try testing.expect(!(try handleKey(.{ .codepoint = 'd' }, &document, &state, allocator)));
+    try testing.expect(document.rows.items.len == 2);
+    try testing.expect(document.cursor_y == 1);
 }
 
 test "removing remainder of line with D" {
@@ -711,13 +726,19 @@ test "join row with next row" {
 
     try document.appendRow(allocator, "hello");
     try document.appendRow(allocator, " world");
+    try document.appendRow(allocator, " world");
     document.cursor_y = 0;
     document.cursor_x = 0;
 
     try testing.expect(!(try handleKey(.{ .codepoint = 'J' }, &document, &state, allocator)));
     try testing.expect(document.cursor_y == 0);
-    try testing.expect(document.rows.items.len == 1);
+    try testing.expect(document.rows.items.len == 2);
     try testing.expectEqualStrings("hello world", document.rows.items[0].chars.items);
+
+    document.cursor_y = 1;
+    try testing.expect(!(try handleKey(.{ .codepoint = 'J' }, &document, &state, allocator)));
+    try testing.expect(document.rows.items.len == 2);
+    try testing.expectEqualStrings(" world", document.rows.items[1].chars.items);
 }
 
 test "x deletes char in normal mode" {
