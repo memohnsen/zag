@@ -63,6 +63,7 @@ const Command = enum {
     insert_end,
     new_line_down,
     new_line_up,
+    carriage_return,
 
     // DELETION
     remove_left,
@@ -156,18 +157,19 @@ pub fn handleKey(
             document.mode = .INSERT;
             document.cursor_x = document.currentRow().?.chars.items.len;
         },
-        // TODO: need to add this new line right below cursor y
+        .carriage_return => {
+            try document.insertNewLine(allocator);
+        },
         .new_line_up => {
-            // try document.insertText(allocator, "\n");
-            // document.mode = .INSERT;
-            // document.cursor_y += 1;
-            // document.cursor_x = 0;
+            try document.insertRow(allocator, "", document.cursor_y);
+            document.cursor_x = 0;
+            document.mode = .INSERT;
         },
         .new_line_down => {
-            // try document.insertText(allocator, "\n");
-            // document.mode = .INSERT;
-            // document.cursor_y += 1;
-            // document.cursor_x = 0;
+            try document.insertRow(allocator, "", document.cursor_y + 1);
+            document.cursor_y += 1;
+            document.cursor_x = 0;
+            document.mode = .INSERT;
         },
         .remove_left => {
             if (document.cursor_x != 0) {
@@ -226,6 +228,7 @@ fn commandFromKey(key: vaxis.Key, document: *editor.Editor, pending_g: bool) Com
     if (key.matches('A', .{}) and document.mode == .NORMAL) return .insert_end;
     if (key.matches('o', .{}) and document.mode == .NORMAL) return .new_line_down;
     if (key.matches('O', .{}) and document.mode == .NORMAL) return .new_line_up;
+    if (key.matches(vaxis.Key.enter, .{}) and document.mode == .INSERT) return .carriage_return;
 
     // DELETION
     if (key.matches(vaxis.Key.backspace, .{}) and document.mode == .INSERT) return .remove_left;
@@ -560,4 +563,30 @@ test "backspace deletes char in insert mode" {
     try testing.expect(!(try handleKey(.{ .codepoint = vaxis.Key.backspace }, &document, &state, allocator)));
     try testing.expectEqualStrings("frst", document.rows.items[0].chars.items);
     try testing.expect(document.cursor_x == 1);
+}
+
+test "new line up and down with vim keys" {
+    const allocator = testing.allocator;
+    var document: editor.Editor = .{};
+    defer document.deinit(allocator);
+    var state: State = .{};
+    try document.appendRow(allocator, "first");
+
+    try testing.expect(document.rows.items.len == 1);
+    try testing.expect(!(try handleKey(.{ .codepoint = 'o' }, &document, &state, allocator)));
+    try testing.expect(document.mode == .INSERT);
+    try testing.expect(document.cursor_x == 0);
+    try testing.expect(document.rows.items.len == 2);
+    try testing.expectEqualStrings("first", document.rows.items[0].chars.items);
+    try testing.expectEqualStrings("", document.rows.items[1].chars.items);
+
+    document.cursor_y = 0;
+    document.mode = .NORMAL;
+    try testing.expect(!(try handleKey(.{ .codepoint = 'O' }, &document, &state, allocator)));
+    try testing.expect(document.mode == .INSERT);
+    try testing.expect(document.cursor_x == 0);
+    try testing.expect(document.rows.items.len == 3);
+    try testing.expectEqualStrings("", document.rows.items[0].chars.items);
+    try testing.expectEqualStrings("first", document.rows.items[1].chars.items);
+    try testing.expectEqualStrings("", document.rows.items[2].chars.items);
 }

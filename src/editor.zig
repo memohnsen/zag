@@ -64,6 +64,46 @@ pub const Editor = struct {
         try self.rows.append(allocator, row);
     }
 
+    pub fn insertRow(
+        self: *Editor,
+        allocator: mem.Allocator,
+        input: []const u8,
+        index: usize,
+    ) !void {
+        var row_list: std.ArrayList(u8) = .empty;
+        errdefer row_list.deinit(allocator);
+        try row_list.appendSlice(allocator, input);
+
+        const row = Row{ .chars = row_list };
+        try self.rows.insert(allocator, index, row);
+    }
+
+    pub fn insertNewLine(
+        self: *Editor,
+        allocator: mem.Allocator,
+    ) !void {
+        const y = self.cursor_y;
+        const x = self.cursor_x;
+
+        const remaining_row_chars = self.rows.items[y].chars.items[x..];
+        try self.insertRow(allocator, remaining_row_chars, y + 1);
+
+        const og_row = &self.rows.items[y];
+        og_row.chars.shrinkRetainingCapacity(x);
+        self.cursor_y = y + 1;
+        self.cursor_x = 0;
+    }
+
+    pub fn insertNewLineBlank(
+        self: *Editor,
+        allocator: mem.Allocator,
+    ) !void {
+        try self.insertRow(allocator, "", self.cursor_y + 1);
+
+        self.cursor_y += 1;
+        self.cursor_x = 0;
+    }
+
     pub fn insertText(self: *Editor, allocator: mem.Allocator, input: []const u8) !void {
         if (self.rows.items.len == 0) {
             try self.appendRow(allocator, "");
@@ -159,4 +199,33 @@ test "byte is removed from line" {
     document.cursor_x = 3;
     row.removeByte(document.cursor_x - 1);
     try testing.expectEqualStrings("Helo", row.chars.items);
+}
+
+test "inserting new row" {
+    const allocator = testing.allocator;
+    var document = Editor{};
+    defer document.deinit(allocator);
+
+    try document.appendRow(allocator, "zero");
+    try document.appendRow(allocator, "two");
+
+    try document.insertRow(allocator, "one", 1);
+    try testing.expectEqualStrings("zero", document.rows.items[0].chars.items);
+    try testing.expectEqualStrings("one", document.rows.items[1].chars.items);
+    try testing.expectEqualStrings("two", document.rows.items[2].chars.items);
+}
+
+test "inserting new line" {
+    const allocator = testing.allocator;
+    var document = Editor{};
+    defer document.deinit(allocator);
+
+    try document.appendRow(allocator, "hello world");
+    document.cursor_x = 5;
+
+    try document.insertNewLine(allocator);
+    try testing.expectEqualStrings("hello", document.rows.items[0].chars.items);
+    try testing.expectEqualStrings(" world", document.rows.items[1].chars.items);
+    try testing.expect(document.cursor_y == 1);
+    try testing.expect(document.cursor_x == 0);
 }
