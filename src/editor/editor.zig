@@ -50,6 +50,35 @@ pub const Editor = struct {
         }
     }
 
+    pub fn joinWithPrevRow(self: *Editor, allocator: mem.Allocator) !void {
+        if (self.cursor_y == 0) {
+            return;
+        }
+
+        if (self.currentRow()) |row| {
+            const prev_row = &self.rows.items[self.cursor_y - 1];
+            const prev_row_length = self.rows.items[self.cursor_y - 1].chars.items.len;
+            const current_row_text = row.chars.items;
+            try prev_row.insertText(allocator, prev_row_length, current_row_text);
+            try self.removeRow(allocator, self.cursor_y);
+            self.cursor_x = prev_row_length;
+        }
+    }
+
+    pub fn joinWithNextRow(self: *Editor, allocator: mem.Allocator) !void {
+        if (self.cursor_y == self.rows.items.len) {
+            return;
+        }
+
+        if (self.currentRow()) |row| {
+            const next_row_text = self.rows.items[self.cursor_y + 1].chars.items;
+            const current_row_len = row.chars.items.len;
+            try row.insertText(allocator, current_row_len, next_row_text);
+            try self.removeRow(allocator, self.cursor_y + 1);
+            self.cursor_x = current_row_len;
+        }
+    }
+
     pub fn deleteRemainingLine(
         self: *Editor,
     ) void {
@@ -236,4 +265,34 @@ test "removing remainder of line" {
 
     document.deleteRemainingLine();
     try testing.expectEqualStrings("h", document.rows.items[0].chars.items);
+}
+
+test "join row with prev row" {
+    const allocator = testing.allocator;
+    var document = Editor{};
+    defer document.deinit(allocator);
+
+    try document.appendRow(allocator, "hello");
+    try document.appendRow(allocator, " world");
+    document.cursor_y = 1;
+    document.cursor_x = 0;
+
+    try document.joinWithPrevRow(allocator);
+    try testing.expect(document.rows.items.len == 1);
+    try testing.expectEqualStrings("hello world", document.rows.items[0].chars.items);
+}
+
+test "join row with next row" {
+    const allocator = testing.allocator;
+    var document = Editor{};
+    defer document.deinit(allocator);
+
+    try document.appendRow(allocator, "hello");
+    try document.appendRow(allocator, " world");
+    document.cursor_y = 0;
+    document.cursor_x = 0;
+
+    try document.joinWithNextRow(allocator);
+    try testing.expect(document.rows.items.len == 1);
+    try testing.expectEqualStrings("hello world", document.rows.items[0].chars.items);
 }

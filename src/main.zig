@@ -4,7 +4,6 @@ const log = std.log;
 const vaxis = @import("vaxis");
 const ui = @import("ui.zig");
 const editor = @import("editor/editor.zig");
-const editorRow = @import("editor/row.zig");
 const commands = @import("commands.zig");
 
 const Event = union(enum) {

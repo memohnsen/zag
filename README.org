@@ -1,0 +1,73 @@
+* Zag - A terminal text editor written in zig
+
+Zag is a terminal text editor written in zig following the Kilo tutorial in C by [[https://viewsourcecode.org/snaptoken/kilo/index.html][Snaptoken]]
+
+Zag comes with most of the vim motions for manipulating and editing text.
+
+** Available keybindings
+
+*** All modes
+ - arrow keys to move through text
+ - ESC to return to normal mode
+ - Ctrl-q to quit
+
+*** Normal Mode
+**** Movement
+ - <hkjl> to move through text
+ - <Backspace> to move back one char
+ - <Enter> to move one row down
+ - <$> or <gl> to move to last char in row
+ - <0> to move to start of the row
+ - <gh> / <_> to move to first char in row
+ - <gg> to move to first row
+ - <G> to move to last row
+ - <M> to move to middle line of screen
+ - <Ctrl-d> to go down half the screen
+ - <Ctrl-u> to go up half the screen
+
+**** Text Insertion
+ - <a> to enter insert mode to the right of the cursor
+ - <A> to enter insert mode at the end of the row
+ - <i> to enter insert mode to the left of the cursor
+ - <I> to enter insert mode to the left of the first char in the row
+ - <o> to enter insert mode and add a new line below the current
+ - <O> to enter insert mode and add a new line above the current
+
+**** Text Deletion
+ - <Backspace> to remove a char
+ - <dd> to delete the current line
+ - <D> to delete the remainder of the line including the char under the cursor
+ - <x> to delete char under cursor
+ - <X> to delete char to the right of the cursor
+
+**** Text Manipulation
+ - <J> joins the row below the cursor with the current row
+
+**** Modes
+ - <r> / <R> to enter replace mode ( does nothing currently )
+ - <v> / <V> to enter visual mode ( does nothing currently )
+
+** Working with Zag
+Zag is written using the latest stable release of Zig 0.16
+
+You can use the Zig build system to build and run the project
+#+begin_src zig
+zig build run
+
+zig build
+
+zig build test
+#+end_src
+
+or use the Justfile in the project
+#+begin_src just
+just run
+
+just welcome
+
+just build
+
+just test
+#+end_src
+
+When working with the project, just run will open the editor to a test file in the root. If you want to open the welcome screen run 'just welcome' or 'zig build run'

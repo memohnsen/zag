@@ -1,42 +1,3 @@
-/// #Available keybindings
-///
-/// ##All modes
-/// - arrow keys to move through text
-/// - ESC to return to normal mode
-/// - Ctrl-q to quit
-///
-/// ##Normal Mode
-///
-/// ###Movement
-/// - hkjl to move through text
-/// - Backspace to move back one char
-/// - Enter to move one row down
-/// - $ or gl to move to last char in row
-/// - 0 to move to start of the row
-/// - gh / _ to move to first char in row
-/// - gg to move to first row
-/// - G to move to last row
-/// - M to move to middle line of screen
-/// - Ctrl-d to go down half the screen
-/// - Ctrl-u to go up half the screen
-///
-/// ###Text Insertion
-/// - a to enter insert mode to the right of the cursor
-/// - A to enter insert mode at the end of the row
-/// - i to enter insert mode to the left of the cursor
-/// - I to enter insert mode to the left of the first char in the row
-/// - o to enter insert mode and add a new line below the current
-/// - O to enter insert mode and add a new line above the current
-///
-/// ###Text Deletion
-/// - backspace to remove a char
-/// - dd to delete the current line
-/// - D to delete the remainder of the line including the char under the cursor
-///
-/// ###Modes
-/// - r / R to enter replace mode ( does nothing currently )
-/// - v / V to enter visual mode ( does nothing currently )
-///
 const std = @import("std");
 const testing = std.testing;
 
@@ -73,8 +34,12 @@ const Command = enum {
     new_line_up,
     carriage_return,
 
+    // MANIPULATION
+    join_next_line,
+
     // DELETION
-    remove_left,
+    delete_left,
+    delete_current,
     delete_line,
     delete_line_remaining,
 
@@ -186,12 +151,28 @@ pub fn handleKey(
             document.cursor_x = 0;
             document.mode = .INSERT;
         },
-        .remove_left => {
+        .join_next_line => {
+            try document.joinWithNextRow(allocator);
+        },
+        .delete_left => {
             if (document.cursor_x != 0) {
                 if (document.currentRow()) |row| {
                     row.removeByte(document.cursor_x - 1);
                     document.cursor_x -= 1;
                 }
+            } else {
+                if (document.mode == .INSERT) {
+                    try document.joinWithPrevRow(allocator);
+                }
+            }
+        },
+        .delete_current => {
+            if (document.currentRow()) |row| {
+                if (document.cursor_x < row.chars.items.len) {
+                    row.removeByte(document.cursor_x);
+                }
+            } else {
+                try document.joinWithNextRow(allocator);
             }
         },
         .delete_line => {
@@ -257,8 +238,13 @@ fn commandFromKey(key: vaxis.Key, document: *editor.Editor, pending_g: bool) Com
     if (key.matches('O', .{}) and document.mode == .NORMAL) return .new_line_up;
     if (key.matches(vaxis.Key.enter, .{}) and document.mode == .INSERT) return .carriage_return;
 
+    // MANIPULATION
+    if (key.matches('J', .{}) and document.mode == .NORMAL) return .join_next_line;
+
     // DELETION
-    if (key.matches(vaxis.Key.backspace, .{}) and document.mode == .INSERT) return .remove_left;
+    if (key.matches(vaxis.Key.backspace, .{}) and document.mode == .INSERT) return .delete_left;
+    if (key.matches('x', .{}) and document.mode == .NORMAL) return .delete_current;
+    if (key.matches('X', .{}) and document.mode == .NORMAL) return .delete_left;
     if (key.matches('d', .{}) and document.mode == .NORMAL) return .delete_line;
     if (key.matches('D', .{}) and document.mode == .NORMAL) return .delete_line_remaining;
 
@@ -697,4 +683,75 @@ test "removing remainder of line with D" {
 
     try testing.expect(!(try handleKey(.{ .codepoint = 'D' }, &document, &state, allocator)));
     try testing.expectEqualStrings("h", document.rows.items[0].chars.items);
+}
+
+test "joining row with prev row" {
+    const allocator = testing.allocator;
+    var document: editor.Editor = .{};
+    defer document.deinit(allocator);
+    var state: State = .{};
+
+    try document.appendRow(allocator, "hello");
+    try document.appendRow(allocator, " world");
+    document.cursor_y = 1;
+    document.cursor_x = 0;
+    document.mode = .INSERT;
+
+    try testing.expect(!(try handleKey(.{ .codepoint = vaxis.Key.backspace }, &document, &state, allocator)));
+    try testing.expect(document.cursor_y == 0);
+    try testing.expect(document.rows.items.len == 1);
+    try testing.expectEqualStrings("hello world", document.rows.items[0].chars.items);
+}
+
+test "join row with next row" {
+    const allocator = testing.allocator;
+    var document: editor.Editor = .{};
+    defer document.deinit(allocator);
+    var state: State = .{};
+
+    try document.appendRow(allocator, "hello");
+    try document.appendRow(allocator, " world");
+    document.cursor_y = 0;
+    document.cursor_x = 0;
+
+    try testing.expect(!(try handleKey(.{ .codepoint = 'J' }, &document, &state, allocator)));
+    try testing.expect(document.cursor_y == 0);
+    try testing.expect(document.rows.items.len == 1);
+    try testing.expectEqualStrings("hello world", document.rows.items[0].chars.items);
+}
+
+test "x deletes char in normal mode" {
+    const allocator = testing.allocator;
+    var document: editor.Editor = .{};
+    defer document.deinit(allocator);
+    var state: State = .{};
+
+    try testing.expect(!(try handleKey(.{ .codepoint = 'x' }, &document, &state, allocator)));
+    try testing.expect(document.rows.items.len == 0);
+    try testing.expect(document.cursor_x == 0);
+
+    try document.appendRow(allocator, "first");
+    document.cursor_x = 1;
+
+    try testing.expect(!(try handleKey(.{ .codepoint = 'x' }, &document, &state, allocator)));
+    try testing.expectEqualStrings("frst", document.rows.items[0].chars.items);
+    try testing.expect(document.cursor_x == 1);
+}
+
+test "X deletes prev char in normal mode" {
+    const allocator = testing.allocator;
+    var document: editor.Editor = .{};
+    defer document.deinit(allocator);
+    var state: State = .{};
+
+    try testing.expect(!(try handleKey(.{ .codepoint = 'X' }, &document, &state, allocator)));
+    try testing.expect(document.rows.items.len == 0);
+    try testing.expect(document.cursor_x == 0);
+
+    try document.appendRow(allocator, "first");
+    document.cursor_x = 1;
+
+    try testing.expect(!(try handleKey(.{ .codepoint = 'X' }, &document, &state, allocator)));
+    try testing.expectEqualStrings("irst", document.rows.items[0].chars.items);
+    try testing.expect(document.cursor_x == 0);
 }

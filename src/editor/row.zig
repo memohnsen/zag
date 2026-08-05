@@ -20,9 +20,8 @@ pub const Row = struct {
     }
 
     pub fn removeByte(self: *Row, index: usize) void {
-        if (index < self.chars.items.len) {
-            _ = self.chars.orderedRemove(index);
-        }
+        std.debug.assert(index < self.chars.items.len);
+        _ = self.chars.orderedRemove(index);
     }
 };
 
