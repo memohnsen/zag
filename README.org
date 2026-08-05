@@ -51,7 +51,7 @@ Zag comes with most of the vim motions for manipulating and editing text.
 Zag is written using the latest stable release of Zig 0.16
 
 You can use the Zig build system to build and run the project
-#+begin_src zig
+#+begin_src bash
 zig build run
 
 zig build
@@ -60,7 +60,7 @@ zig build test
 #+end_src
 
 or use the Justfile in the project
-#+begin_src just
+#+begin_src bash
 just run
 
 just welcome
