@@ -1,29 +1,7 @@
 const std = @import("std");
 const mem = std.mem;
 const testing = std.testing;
-
-pub const Row = struct {
-    chars: std.ArrayList(u8) = .empty,
-
-    pub fn deinit(self: *Row, allocator: mem.Allocator) void {
-        self.chars.deinit(allocator);
-    }
-
-    pub fn insertText(
-        self: *Row,
-        allocator: mem.Allocator,
-        index: usize,
-        text: []const u8,
-    ) !void {
-        std.debug.assert(index <= self.chars.items.len);
-        try self.chars.insertSlice(allocator, index, text);
-    }
-
-    pub fn removeByte(self: *Row, index: usize) void {
-        std.debug.assert(index < self.chars.items.len);
-        _ = self.chars.orderedRemove(index);
-    }
-};
+const Row = @import("row.zig").Row;
 
 pub const Mode = enum {
     NORMAL,
@@ -74,7 +52,7 @@ pub const Editor = struct {
 
     pub fn deleteRemainingLine(
         self: *Editor,
-    ) !void {
+    ) void {
         const y = self.cursor_y;
         const x = self.cursor_x;
 
@@ -193,30 +171,6 @@ test "get current row" {
     try testing.expectEqualStrings("two", row.chars.items);
 }
 
-test "text inserts into row" {
-    var document = Editor{};
-    const allocator = testing.allocator;
-    defer document.deinit(allocator);
-
-    try document.appendRow(allocator, "Hello");
-    const row = document.currentRow().?;
-    try row.insertText(allocator, 0, "r");
-
-    try testing.expectEqualStrings("rHello", row.chars.items);
-}
-
-test "byte is removed from line" {
-    var document = Editor{};
-    const allocator = testing.allocator;
-    defer document.deinit(allocator);
-
-    try document.appendRow(allocator, "Hello");
-    const row = document.currentRow().?;
-    document.cursor_x = 3;
-    row.removeByte(document.cursor_x - 1);
-    try testing.expectEqualStrings("Helo", row.chars.items);
-}
-
 test "inserting new row" {
     const allocator = testing.allocator;
     var document = Editor{};
@@ -280,6 +234,6 @@ test "removing remainder of line" {
     try document.appendRow(allocator, "hello");
     document.cursor_x = 1;
 
-    try document.deleteRemainingLine();
+    document.deleteRemainingLine();
     try testing.expectEqualStrings("h", document.rows.items[0].chars.items);
 }

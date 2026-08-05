@@ -3,7 +3,8 @@ const log = std.log;
 
 const vaxis = @import("vaxis");
 const ui = @import("ui.zig");
-const editor = @import("editor.zig");
+const editor = @import("editor/editor.zig");
+const editorRow = @import("editor/row.zig");
 const commands = @import("commands.zig");
 
 const Event = union(enum) {
@@ -117,6 +118,7 @@ fn handleArgs(
 
 test "all" {
     _ = @import("commands.zig");
-    _ = @import("editor.zig");
+    _ = @import("editor/editor.zig");
     _ = @import("ui.zig");
+    _ = @import("editor/row.zig");
 }

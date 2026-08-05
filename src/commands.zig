@@ -31,6 +31,7 @@
 /// ###Text Deletion
 /// - backspace to remove a char
 /// - dd to delete the current line
+/// - D to delete the remainder of the line including the char under the cursor
 ///
 /// ###Modes
 /// - r / R to enter replace mode ( does nothing currently )
@@ -40,7 +41,7 @@ const std = @import("std");
 const testing = std.testing;
 
 const vaxis = @import("vaxis");
-const editor = @import("editor.zig");
+const editor = @import("editor/editor.zig");
 
 pub const State = struct {
     pending_g: bool = false,
@@ -202,7 +203,7 @@ pub fn handleKey(
             }
         },
         .delete_line_remaining => {
-            try document.deleteRemainingLine();
+            document.deleteRemainingLine();
         },
         .visual => document.mode = .VISUAL,
         .command => document.mode = .COMMAND,

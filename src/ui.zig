@@ -1,6 +1,6 @@
 const std = @import("std");
 const vaxis = @import("vaxis");
-const editor = @import("editor.zig");
+const editor = @import("editor/editor.zig");
 
 const welcome_text = "Zag Editor -- Version 0.1.0";
 
