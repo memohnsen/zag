@@ -51,7 +51,7 @@ fn run(init: std.process.Init) !void {
         const event = try event_loop.nextEvent();
         switch (event) {
             .key_press => |key| {
-                if (commands.handleKey(key, &document, &command_state)) break;
+                if (try commands.handleKey(key, &document, &command_state, gpa)) break;
             },
             .winsize => |size| {
                 try vx.resize(gpa, tty.writer(), size);
@@ -62,6 +62,7 @@ fn run(init: std.process.Init) !void {
         const text_height = window.height -| 1;
         document.scroll(text_height, window.width);
         try ui.refresh(&vx, tty.writer(), &document);
+        document.rows_shown = vx.window().height;
     }
 }
 

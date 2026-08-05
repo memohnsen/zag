@@ -59,8 +59,7 @@ fn drawStatusBar(
 
     // Show filename and lines in file
     const file: []const u8 = if (document.filename) |name| name else "[No File]";
-    const mode = document.mode.fmt();
-    const file_text = try std.fmt.bufPrint(file_buf, " {s} | {s} - {d} lines", .{ mode, file, document.rows.items.len });
+    const file_text = try std.fmt.bufPrint(file_buf, " {s} | {s} - {d} lines", .{ @tagName(document.mode), file, document.rows.items.len });
     _ = status_window.printSegment(.{ .text = file_text, .style = .{ .reverse = true } }, .{ .wrap = .none });
 
     // Show cursor position

@@ -1,3 +1,35 @@
+/// #Available keybindings
+///
+/// ##All modes
+/// - arrow keys to move through text
+/// - ESC to return to normal mode
+/// - Ctrl-q to quit
+///
+/// ##Normal Mode
+///
+/// ###Movement
+/// - hkjl to move through text
+/// - Backspace to move back one char
+/// - Enter to move one row down
+/// - $ or gl to move to last char in row
+/// - 0 to move to start of the row
+/// - gh / _ to move to first char in row
+/// - gg to move to first row
+/// - G to move to last row
+/// - M to move to middle line of screen
+/// - Ctrl-d to go down half the screen
+/// - Ctrl-u to go up half the screen
+///
+/// ###Text Insertion
+/// - a to enter insert mode to the right of the cursor
+/// - A to enter insert mode at the end of the row
+/// - i to enter insert mode to the left of the cursor
+/// - I to enter insert mode to the left of the first char in the row
+///
+/// ###Modes
+/// - r / R to enter replace mode ( does nothing currently )
+/// - v / V to enter visual mode ( does nothing currently )
+///
 const std = @import("std");
 const testing = std.testing;
 
@@ -20,9 +52,22 @@ const Command = enum {
     document_end,
     line_start,
     line_end,
+    middle,
+    page_down,
+    page_up,
+
+    // INSERTION
+    insert_left,
+    insert_right,
+    insert_start,
+    insert_end,
+    new_line_down,
+    new_line_up,
+
+    // DELETION
+    remove_left,
 
     // MODES
-    insert,
     normal,
     command,
     visual,
@@ -31,7 +76,12 @@ const Command = enum {
     other,
 };
 
-pub fn handleKey(key: vaxis.Key, document: *editor.Editor, state: *State) bool {
+pub fn handleKey(
+    key: vaxis.Key,
+    document: *editor.Editor,
+    state: *State,
+    allocator: std.mem.Allocator,
+) !bool {
     // load pending state into a const so we don't have to false it every branch
     const pending_g = state.pending_g;
     state.pending_g = false;
@@ -79,15 +129,66 @@ pub fn handleKey(key: vaxis.Key, document: *editor.Editor, state: *State) bool {
             }
             state.pending_g = false;
         },
+        .middle => {
+            document.cursor_y = document.row_offset + document.rows_shown / 2 - 1;
+        },
+        .page_down => {
+            document.cursor_y = document.cursor_y +| document.rows_shown / 2;
+        },
+        .page_up => {
+            document.cursor_y = document.cursor_y -| document.rows_shown / 2;
+        },
 
         // MODES
-        .normal => document.mode = .normal,
-        .insert => document.mode = .insert,
-        .visual => document.mode = .visual,
-        .command => document.mode = .command,
-        .replace => document.mode = .replace,
+        .normal => document.mode = .NORMAL,
+        .insert_left => {
+            document.mode = .INSERT;
+        },
+        .insert_right => {
+            document.mode = .INSERT;
+            document.cursor_x = document.cursor_x +| 1;
+        },
+        .insert_start => {
+            document.mode = .INSERT;
+            document.cursor_x = 0;
+        },
+        .insert_end => {
+            document.mode = .INSERT;
+            document.cursor_x = document.currentRow().?.chars.items.len;
+        },
+        // TODO: need to add this new line right below cursor y
+        .new_line_up => {
+            // try document.insertText(allocator, "\n");
+            // document.mode = .INSERT;
+            // document.cursor_y += 1;
+            // document.cursor_x = 0;
+        },
+        .new_line_down => {
+            // try document.insertText(allocator, "\n");
+            // document.mode = .INSERT;
+            // document.cursor_y += 1;
+            // document.cursor_x = 0;
+        },
+        .remove_left => {
+            if (document.cursor_x != 0) {
+                if (document.currentRow()) |row| {
+                    row.removeByte(document.cursor_x - 1);
+                    document.cursor_x -= 1;
+                }
+            }
+        },
+        .visual => document.mode = .VISUAL,
+        .command => document.mode = .COMMAND,
+        .replace => document.mode = .REPLACE,
 
-        .other => state.pending_g = false,
+        .other => {
+            state.pending_g = false;
+            if (document.mode == .INSERT) {
+                if (key.text) |text| {
+                    try document.insertText(allocator, text);
+                }
+            }
+        },
     }
 
     clampCursorX(document);
@@ -95,34 +196,45 @@ pub fn handleKey(key: vaxis.Key, document: *editor.Editor, state: *State) bool {
 }
 
 fn commandFromKey(key: vaxis.Key, document: *editor.Editor, pending_g: bool) Command {
+    // ALL MODES
     if (key.matches('q', .{ .ctrl = true })) return .quit;
+    if (key.matches(vaxis.Key.escape, .{}) and document.mode != .NORMAL) return .normal;
 
     // NAVIGATION
-    if (key.matches('G', .{}) and document.mode == .normal) return .document_end;
-    if (key.matches('0', .{}) and document.mode == .normal) return .line_start;
-    if (key.matches('h', .{}) and document.mode == .normal and pending_g) return .line_start;
-    if (key.matches('$', .{}) and document.mode == .normal) return .line_end;
-    if (key.matches('l', .{}) and document.mode == .normal and pending_g) return .line_end;
-    if (key.matches('g', .{}) and document.mode == .normal) return .doc_start_gg;
+    if (key.matches('G', .{}) and document.mode == .NORMAL) return .document_end;
+    if (key.matches('0', .{}) and document.mode == .NORMAL) return .line_start;
+    if (key.matches('h', .{}) and document.mode == .NORMAL and pending_g) return .line_start;
+    if (key.matches('$', .{}) and document.mode == .NORMAL) return .line_end;
+    if (key.matches('l', .{}) and document.mode == .NORMAL and pending_g) return .line_end;
+    if (key.matches('g', .{}) and document.mode == .NORMAL) return .doc_start_gg;
+    if (key.matches('M', .{}) and document.mode == .NORMAL) return .middle;
+    if (key.matches('d', .{ .ctrl = true }) and document.mode == .NORMAL) return .page_down;
+    if (key.matches('u', .{ .ctrl = true }) and document.mode == .NORMAL) return .page_up;
+    if (key.matches(vaxis.Key.backspace, .{}) and document.mode == .NORMAL) return .left;
+    if (key.matches(vaxis.Key.enter, .{}) and document.mode == .NORMAL) return .down;
 
-    if (key.matches('h', .{}) and document.mode == .normal) return .left;
-    if (key.matches('j', .{}) and document.mode == .normal) return .down;
-    if (key.matches('k', .{}) and document.mode == .normal) return .up;
-    if (key.matches('l', .{}) and document.mode == .normal) return .right;
+    // these must come after otherwise pending g will never catch
+    if (key.matches('h', .{}) and document.mode == .NORMAL) return .left;
+    if (key.matches('j', .{}) and document.mode == .NORMAL) return .down;
+    if (key.matches('k', .{}) and document.mode == .NORMAL) return .up;
+    if (key.matches('l', .{}) and document.mode == .NORMAL) return .right;
+
+    // INSERTION
+    if (key.matches('i', .{}) and document.mode == .NORMAL) return .insert_left;
+    if (key.matches('I', .{}) and document.mode == .NORMAL) return .insert_start;
+    if (key.matches('a', .{}) and document.mode == .NORMAL) return .insert_right;
+    if (key.matches('A', .{}) and document.mode == .NORMAL) return .insert_end;
+    if (key.matches('o', .{}) and document.mode == .NORMAL) return .new_line_down;
+    if (key.matches('O', .{}) and document.mode == .NORMAL) return .new_line_up;
+
+    // DELETION
+    if (key.matches(vaxis.Key.backspace, .{}) and document.mode == .INSERT) return .remove_left;
 
     // MODES
-    if (key.matches('i', .{}) and document.mode == .normal) return .insert;
-    if (key.matches('I', .{}) and document.mode == .normal) return .insert;
-    if (key.matches('a', .{}) and document.mode == .normal) return .insert;
-    if (key.matches('A', .{}) and document.mode == .normal) return .insert;
-
-    if (key.matches('r', .{}) and document.mode == .normal) return .replace;
-    if (key.matches('R', .{}) and document.mode == .normal) return .replace;
-
-    if (key.matches('v', .{}) and document.mode == .normal) return .visual;
-    if (key.matches('V', .{}) and document.mode == .normal) return .visual;
-
-    if (key.matches(vaxis.Key.escape, .{}) and document.mode != .normal) return .normal;
+    if (key.matches('r', .{}) and document.mode == .NORMAL) return .replace;
+    if (key.matches('R', .{}) and document.mode == .NORMAL) return .replace;
+    if (key.matches('v', .{}) and document.mode == .NORMAL) return .visual;
+    if (key.matches('V', .{}) and document.mode == .NORMAL) return .visual;
 
     // ARROWS
     return switch (key.codepoint) {
@@ -143,16 +255,21 @@ fn clampCursorX(document: *editor.Editor) void {
     if (row.chars.items.len == 0) {
         document.cursor_x = 0;
     } else if (document.cursor_x >= row.chars.items.len) {
-        document.cursor_x = row.chars.items.len - 1;
+        if (document.mode == .NORMAL) {
+            document.cursor_x = row.chars.items.len - 1;
+        } else {
+            document.cursor_x = row.chars.items.len;
+        }
     }
 }
 
 test "ctrl-q quits" {
     var document: editor.Editor = .{};
+    const allocator = testing.allocator;
     var state: State = .{};
     const key: vaxis.Key = .{ .codepoint = 'q', .mods = .{ .ctrl = true } };
 
-    try testing.expect(handleKey(key, &document, &state));
+    try testing.expect(try handleKey(key, &document, &state, allocator));
 }
 
 test "cursor clamps at final char in row when changing lines" {
@@ -165,7 +282,7 @@ test "cursor clamps at final char in row when changing lines" {
     try document.appendRow(allocator, "short");
 
     document.cursor_x = 18;
-    _ = handleKey(.{ .codepoint = 'j' }, &document, &state);
+    _ = try handleKey(.{ .codepoint = 'j' }, &document, &state, allocator);
     try testing.expect(document.cursor_x == 4);
 }
 
@@ -179,12 +296,12 @@ test "gg and G move to document boundaries" {
     try document.appendRow(allocator, "second");
     try document.appendRow(allocator, "third");
 
-    try testing.expect(!handleKey(.{ .codepoint = 'G' }, &document, &state));
+    try testing.expect(!(try handleKey(.{ .codepoint = 'G' }, &document, &state, allocator)));
     try testing.expectEqual(@as(usize, 2), document.cursor_y);
 
-    try testing.expect(!handleKey(.{ .codepoint = 'g' }, &document, &state));
+    try testing.expect(!(try handleKey(.{ .codepoint = 'g' }, &document, &state, allocator)));
     try testing.expect(state.pending_g);
-    try testing.expect(!handleKey(.{ .codepoint = 'g' }, &document, &state));
+    try testing.expect(!(try handleKey(.{ .codepoint = 'g' }, &document, &state, allocator)));
     try testing.expectEqual(@as(usize, 0), document.cursor_y);
     try testing.expect(!state.pending_g);
 }
@@ -198,13 +315,13 @@ test "0 and gh move to line start" {
     try document.appendRow(allocator, "first");
 
     document.cursor_x = 3;
-    try testing.expect(!handleKey(.{ .codepoint = '0' }, &document, &state));
+    try testing.expect(!(try handleKey(.{ .codepoint = '0' }, &document, &state, allocator)));
     try testing.expectEqual(@as(usize, 0), document.cursor_x);
 
     document.cursor_x = 3;
-    try testing.expect(!handleKey(.{ .codepoint = 'g' }, &document, &state));
+    try testing.expect(!(try handleKey(.{ .codepoint = 'g' }, &document, &state, allocator)));
     try testing.expect(state.pending_g);
-    try testing.expect(!handleKey(.{ .codepoint = 'h' }, &document, &state));
+    try testing.expect(!(try handleKey(.{ .codepoint = 'h' }, &document, &state, allocator)));
     try testing.expectEqual(@as(usize, 0), document.cursor_x);
 }
 
@@ -216,17 +333,17 @@ test "$ and gl move to line end" {
 
     try document.appendRow(allocator, "first");
 
-    try testing.expect(!handleKey(.{ .codepoint = '$' }, &document, &state));
+    try testing.expect(!(try handleKey(.{ .codepoint = '$' }, &document, &state, allocator)));
     try testing.expectEqual(@as(usize, 4), document.cursor_x);
 
     document.cursor_x = 0;
-    try testing.expect(!handleKey(.{ .codepoint = 'g' }, &document, &state));
+    try testing.expect(!(try handleKey(.{ .codepoint = 'g' }, &document, &state, allocator)));
     try testing.expect(state.pending_g);
-    try testing.expect(!handleKey(.{ .codepoint = 'l' }, &document, &state));
+    try testing.expect(!(try handleKey(.{ .codepoint = 'l' }, &document, &state, allocator)));
     try testing.expectEqual(@as(usize, 4), document.cursor_x);
 }
 
-test "hjkl work for movement in normal mode" {
+test "hjkl work for movement in.NORMAL mode" {
     const allocator = testing.allocator;
     var document: editor.Editor = .{};
     defer document.deinit(allocator);
@@ -236,24 +353,24 @@ test "hjkl work for movement in normal mode" {
     try document.appendRow(allocator, "second");
     try document.appendRow(allocator, "third");
 
-    try testing.expect(document.mode == .normal);
-    try testing.expect(!handleKey(.{ .codepoint = 'l' }, &document, &state));
+    try testing.expect(document.mode == .NORMAL);
+    try testing.expect(!(try handleKey(.{ .codepoint = 'l' }, &document, &state, allocator)));
     try testing.expectEqual(@as(usize, 1), document.cursor_x);
-    try testing.expect(!handleKey(.{ .codepoint = 'h' }, &document, &state));
+    try testing.expect(!(try handleKey(.{ .codepoint = 'h' }, &document, &state, allocator)));
     try testing.expectEqual(@as(usize, 0), document.cursor_x);
-    try testing.expect(!handleKey(.{ .codepoint = 'j' }, &document, &state));
+    try testing.expect(!(try handleKey(.{ .codepoint = 'j' }, &document, &state, allocator)));
     try testing.expectEqual(@as(usize, 1), document.cursor_y);
-    try testing.expect(!handleKey(.{ .codepoint = 'k' }, &document, &state));
+    try testing.expect(!(try handleKey(.{ .codepoint = 'k' }, &document, &state, allocator)));
     try testing.expectEqual(@as(usize, 0), document.cursor_y);
 
-    document.mode = .insert;
-    try testing.expect(!handleKey(.{ .codepoint = 'l' }, &document, &state));
+    document.mode = .INSERT;
+    try testing.expect(!(try handleKey(.{ .codepoint = 'l' }, &document, &state, allocator)));
     try testing.expectEqual(@as(usize, 0), document.cursor_x);
-    try testing.expect(!handleKey(.{ .codepoint = 'h' }, &document, &state));
+    try testing.expect(!(try handleKey(.{ .codepoint = 'h' }, &document, &state, allocator)));
     try testing.expectEqual(@as(usize, 0), document.cursor_x);
-    try testing.expect(!handleKey(.{ .codepoint = 'j' }, &document, &state));
+    try testing.expect(!(try handleKey(.{ .codepoint = 'j' }, &document, &state, allocator)));
     try testing.expectEqual(@as(usize, 0), document.cursor_y);
-    try testing.expect(!handleKey(.{ .codepoint = 'k' }, &document, &state));
+    try testing.expect(!(try handleKey(.{ .codepoint = 'k' }, &document, &state, allocator)));
     try testing.expectEqual(@as(usize, 0), document.cursor_y);
 }
 
@@ -267,54 +384,54 @@ test "arrows work for movement in all modes" {
     try document.appendRow(allocator, "second");
     try document.appendRow(allocator, "third");
 
-    try testing.expect(document.mode == .normal);
-    try testing.expect(!handleKey(.{ .codepoint = vaxis.Key.right }, &document, &state));
+    try testing.expect(document.mode == .NORMAL);
+    try testing.expect(!(try handleKey(.{ .codepoint = vaxis.Key.right }, &document, &state, allocator)));
     try testing.expectEqual(@as(usize, 1), document.cursor_x);
-    try testing.expect(!handleKey(.{ .codepoint = vaxis.Key.left }, &document, &state));
+    try testing.expect(!(try handleKey(.{ .codepoint = vaxis.Key.left }, &document, &state, allocator)));
     try testing.expectEqual(@as(usize, 0), document.cursor_x);
-    try testing.expect(!handleKey(.{ .codepoint = vaxis.Key.down }, &document, &state));
+    try testing.expect(!(try handleKey(.{ .codepoint = vaxis.Key.down }, &document, &state, allocator)));
     try testing.expectEqual(@as(usize, 1), document.cursor_y);
-    try testing.expect(!handleKey(.{ .codepoint = vaxis.Key.up }, &document, &state));
+    try testing.expect(!(try handleKey(.{ .codepoint = vaxis.Key.up }, &document, &state, allocator)));
     try testing.expectEqual(@as(usize, 0), document.cursor_y);
 
-    document.mode = .insert;
-    try testing.expect(!handleKey(.{ .codepoint = vaxis.Key.right }, &document, &state));
+    document.mode = .INSERT;
+    try testing.expect(!(try handleKey(.{ .codepoint = vaxis.Key.right }, &document, &state, allocator)));
     try testing.expectEqual(@as(usize, 1), document.cursor_x);
-    try testing.expect(!handleKey(.{ .codepoint = vaxis.Key.left }, &document, &state));
+    try testing.expect(!(try handleKey(.{ .codepoint = vaxis.Key.left }, &document, &state, allocator)));
     try testing.expectEqual(@as(usize, 0), document.cursor_x);
-    try testing.expect(!handleKey(.{ .codepoint = vaxis.Key.down }, &document, &state));
+    try testing.expect(!(try handleKey(.{ .codepoint = vaxis.Key.down }, &document, &state, allocator)));
     try testing.expectEqual(@as(usize, 1), document.cursor_y);
-    try testing.expect(!handleKey(.{ .codepoint = vaxis.Key.up }, &document, &state));
+    try testing.expect(!(try handleKey(.{ .codepoint = vaxis.Key.up }, &document, &state, allocator)));
     try testing.expectEqual(@as(usize, 0), document.cursor_y);
 
-    document.mode = .visual;
-    try testing.expect(!handleKey(.{ .codepoint = vaxis.Key.right }, &document, &state));
+    document.mode = .VISUAL;
+    try testing.expect(!(try handleKey(.{ .codepoint = vaxis.Key.right }, &document, &state, allocator)));
     try testing.expectEqual(@as(usize, 1), document.cursor_x);
-    try testing.expect(!handleKey(.{ .codepoint = vaxis.Key.left }, &document, &state));
+    try testing.expect(!(try handleKey(.{ .codepoint = vaxis.Key.left }, &document, &state, allocator)));
     try testing.expectEqual(@as(usize, 0), document.cursor_x);
-    try testing.expect(!handleKey(.{ .codepoint = vaxis.Key.down }, &document, &state));
+    try testing.expect(!(try handleKey(.{ .codepoint = vaxis.Key.down }, &document, &state, allocator)));
     try testing.expectEqual(@as(usize, 1), document.cursor_y);
-    try testing.expect(!handleKey(.{ .codepoint = vaxis.Key.up }, &document, &state));
+    try testing.expect(!(try handleKey(.{ .codepoint = vaxis.Key.up }, &document, &state, allocator)));
     try testing.expectEqual(@as(usize, 0), document.cursor_y);
 
-    document.mode = .replace;
-    try testing.expect(!handleKey(.{ .codepoint = vaxis.Key.right }, &document, &state));
+    document.mode = .REPLACE;
+    try testing.expect(!(try handleKey(.{ .codepoint = vaxis.Key.right }, &document, &state, allocator)));
     try testing.expectEqual(@as(usize, 1), document.cursor_x);
-    try testing.expect(!handleKey(.{ .codepoint = vaxis.Key.left }, &document, &state));
+    try testing.expect(!(try handleKey(.{ .codepoint = vaxis.Key.left }, &document, &state, allocator)));
     try testing.expectEqual(@as(usize, 0), document.cursor_x);
-    try testing.expect(!handleKey(.{ .codepoint = vaxis.Key.down }, &document, &state));
+    try testing.expect(!(try handleKey(.{ .codepoint = vaxis.Key.down }, &document, &state, allocator)));
     try testing.expectEqual(@as(usize, 1), document.cursor_y);
-    try testing.expect(!handleKey(.{ .codepoint = vaxis.Key.up }, &document, &state));
+    try testing.expect(!(try handleKey(.{ .codepoint = vaxis.Key.up }, &document, &state, allocator)));
     try testing.expectEqual(@as(usize, 0), document.cursor_y);
 
-    document.mode = .command;
-    try testing.expect(!handleKey(.{ .codepoint = vaxis.Key.right }, &document, &state));
+    document.mode = .COMMAND;
+    try testing.expect(!(try handleKey(.{ .codepoint = vaxis.Key.right }, &document, &state, allocator)));
     try testing.expectEqual(@as(usize, 1), document.cursor_x);
-    try testing.expect(!handleKey(.{ .codepoint = vaxis.Key.left }, &document, &state));
+    try testing.expect(!(try handleKey(.{ .codepoint = vaxis.Key.left }, &document, &state, allocator)));
     try testing.expectEqual(@as(usize, 0), document.cursor_x);
-    try testing.expect(!handleKey(.{ .codepoint = vaxis.Key.down }, &document, &state));
+    try testing.expect(!(try handleKey(.{ .codepoint = vaxis.Key.down }, &document, &state, allocator)));
     try testing.expectEqual(@as(usize, 1), document.cursor_y);
-    try testing.expect(!handleKey(.{ .codepoint = vaxis.Key.up }, &document, &state));
+    try testing.expect(!(try handleKey(.{ .codepoint = vaxis.Key.up }, &document, &state, allocator)));
     try testing.expectEqual(@as(usize, 0), document.cursor_y);
 }
 
@@ -328,28 +445,119 @@ test "modes change" {
     try document.appendRow(allocator, "second");
     try document.appendRow(allocator, "third");
 
-    try testing.expect(document.mode == .normal);
-    try testing.expect(!handleKey(.{ .codepoint = 'i' }, &document, &state));
-    try testing.expect(document.mode == .insert);
-    try testing.expect(!handleKey(.{ .codepoint = vaxis.Key.escape }, &document, &state));
-    try testing.expect(!handleKey(.{ .codepoint = 'a' }, &document, &state));
-    try testing.expect(document.mode == .insert);
+    try testing.expect(document.mode == .NORMAL);
+    try testing.expect(!(try handleKey(.{ .codepoint = 'i' }, &document, &state, allocator)));
+    try testing.expect(document.mode == .INSERT);
+    try testing.expect(!(try handleKey(.{ .codepoint = vaxis.Key.escape }, &document, &state, allocator)));
+    try testing.expect(!(try handleKey(.{ .codepoint = 'a' }, &document, &state, allocator)));
+    try testing.expect(document.mode == .INSERT);
 
-    try testing.expect(!handleKey(.{ .codepoint = vaxis.Key.escape }, &document, &state));
-    try testing.expect(document.mode == .normal);
-    try testing.expect(!handleKey(.{ .codepoint = 'r' }, &document, &state));
-    try testing.expect(document.mode == .replace);
-    try testing.expect(!handleKey(.{ .codepoint = vaxis.Key.escape }, &document, &state));
-    try testing.expect(document.mode == .normal);
-    try testing.expect(!handleKey(.{ .codepoint = 'R' }, &document, &state));
-    try testing.expect(document.mode == .replace);
+    try testing.expect(!(try handleKey(.{ .codepoint = vaxis.Key.escape }, &document, &state, allocator)));
+    try testing.expect(document.mode == .NORMAL);
+    try testing.expect(!(try handleKey(.{ .codepoint = 'r' }, &document, &state, allocator)));
+    try testing.expect(document.mode == .REPLACE);
+    try testing.expect(!(try handleKey(.{ .codepoint = vaxis.Key.escape }, &document, &state, allocator)));
+    try testing.expect(document.mode == .NORMAL);
+    try testing.expect(!(try handleKey(.{ .codepoint = 'R' }, &document, &state, allocator)));
+    try testing.expect(document.mode == .REPLACE);
 
-    try testing.expect(!handleKey(.{ .codepoint = vaxis.Key.escape }, &document, &state));
-    try testing.expect(document.mode == .normal);
-    try testing.expect(!handleKey(.{ .codepoint = 'v' }, &document, &state));
-    try testing.expect(document.mode == .visual);
-    try testing.expect(!handleKey(.{ .codepoint = vaxis.Key.escape }, &document, &state));
-    try testing.expect(document.mode == .normal);
-    try testing.expect(!handleKey(.{ .codepoint = 'V' }, &document, &state));
-    try testing.expect(document.mode == .visual);
+    try testing.expect(!(try handleKey(.{ .codepoint = vaxis.Key.escape }, &document, &state, allocator)));
+    try testing.expect(document.mode == .NORMAL);
+    try testing.expect(!(try handleKey(.{ .codepoint = 'v' }, &document, &state, allocator)));
+    try testing.expect(document.mode == .VISUAL);
+    try testing.expect(!(try handleKey(.{ .codepoint = vaxis.Key.escape }, &document, &state, allocator)));
+    try testing.expect(document.mode == .NORMAL);
+    try testing.expect(!(try handleKey(.{ .codepoint = 'V' }, &document, &state, allocator)));
+    try testing.expect(document.mode == .VISUAL);
+}
+
+test "insert commands position cursor" {
+    const allocator = testing.allocator;
+    var document: editor.Editor = .{};
+    defer document.deinit(allocator);
+    var state: State = .{};
+
+    try document.appendRow(allocator, "first");
+
+    try testing.expect(document.mode == .NORMAL);
+    try testing.expect(!(try handleKey(.{ .codepoint = 'i' }, &document, &state, allocator)));
+    try testing.expect(document.mode == .INSERT);
+    try testing.expect(document.cursor_x == 0);
+
+    try testing.expect(!(try handleKey(.{ .codepoint = vaxis.Key.escape }, &document, &state, allocator)));
+    try testing.expect(document.mode == .NORMAL);
+    try testing.expect(!(try handleKey(.{ .codepoint = 'a' }, &document, &state, allocator)));
+    try testing.expect(document.mode == .INSERT);
+    try testing.expect(document.cursor_x == 1);
+
+    try testing.expect(!(try handleKey(.{ .codepoint = vaxis.Key.escape }, &document, &state, allocator)));
+    try testing.expect(document.mode == .NORMAL);
+    try testing.expect(!(try handleKey(.{ .codepoint = 'I' }, &document, &state, allocator)));
+    try testing.expect(document.mode == .INSERT);
+    try testing.expect(document.cursor_x == 0);
+
+    try testing.expect(!(try handleKey(.{ .codepoint = vaxis.Key.escape }, &document, &state, allocator)));
+    try testing.expect(document.mode == .NORMAL);
+    try testing.expect(!(try handleKey(.{ .codepoint = 'A' }, &document, &state, allocator)));
+    try testing.expect(document.mode == .INSERT);
+    try testing.expect(document.cursor_x == document.currentRow().?.chars.items.len);
+}
+
+test "inserting text with commands" {
+    const allocator = testing.allocator;
+    var document: editor.Editor = .{};
+    defer document.deinit(allocator);
+    var state: State = .{};
+
+    try testing.expect(!(try handleKey(.{ .codepoint = 'i' }, &document, &state, allocator)));
+    try testing.expect(document.mode == .INSERT);
+    try testing.expect(document.cursor_x == 0);
+    try testing.expect(!(try handleKey(.{ .codepoint = 'b', .text = "b" }, &document, &state, allocator)));
+    try testing.expect(document.cursor_x == 1);
+    try testing.expect(!(try handleKey(.{ .codepoint = 'a', .text = "a" }, &document, &state, allocator)));
+    try testing.expect(document.cursor_x == 2);
+    try testing.expectEqualStrings("ba", document.rows.items[document.cursor_y].chars.items);
+    try testing.expect(!(try handleKey(.{ .codepoint = vaxis.Key.escape }, &document, &state, allocator)));
+    try testing.expect(document.mode == .NORMAL);
+    try testing.expect(!(try handleKey(.{ .codepoint = '0' }, &document, &state, allocator)));
+    try testing.expect(document.cursor_x == 0);
+    try testing.expect(!(try handleKey(.{ .codepoint = 'A' }, &document, &state, allocator)));
+    try testing.expect(document.mode == .INSERT);
+    try testing.expect(document.cursor_x == 2);
+    try testing.expect(!(try handleKey(.{ .codepoint = 'n', .text = "n" }, &document, &state, allocator)));
+    try testing.expectEqualStrings("ban", document.rows.items[document.cursor_y].chars.items);
+    try testing.expect(document.cursor_x == 3);
+}
+
+test "empty text on other keypress" {
+    const allocator = testing.allocator;
+    var document: editor.Editor = .{};
+    defer document.deinit(allocator);
+    var state: State = .{};
+
+    try testing.expect(!(try handleKey(.{ .codepoint = 'i' }, &document, &state, allocator)));
+    try testing.expect(document.mode == .INSERT);
+    try testing.expect(document.cursor_x == 0);
+    try testing.expect(!(try handleKey(.{ .codepoint = 'b' }, &document, &state, allocator)));
+    try testing.expect(document.rows.items.len == 0);
+}
+
+test "backspace deletes char in insert mode" {
+    const allocator = testing.allocator;
+    var document: editor.Editor = .{};
+    defer document.deinit(allocator);
+    var state: State = .{};
+
+    document.mode = .INSERT;
+    try testing.expect(!(try handleKey(.{ .codepoint = vaxis.Key.backspace }, &document, &state, allocator)));
+    try testing.expect(document.rows.items.len == 0);
+    try testing.expect(document.cursor_x == 0);
+
+    try document.appendRow(allocator, "first");
+    document.cursor_x = 2;
+    document.mode = .INSERT;
+
+    try testing.expect(!(try handleKey(.{ .codepoint = vaxis.Key.backspace }, &document, &state, allocator)));
+    try testing.expectEqualStrings("frst", document.rows.items[0].chars.items);
+    try testing.expect(document.cursor_x == 1);
 }

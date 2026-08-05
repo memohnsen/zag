@@ -18,34 +18,30 @@ pub const Row = struct {
         std.debug.assert(index <= self.chars.items.len);
         try self.chars.insertSlice(allocator, index, text);
     }
+
+    pub fn removeByte(self: *Row, index: usize) void {
+        std.debug.assert(index < self.chars.items.len);
+        _ = self.chars.orderedRemove(index);
+    }
 };
 
 pub const Mode = enum {
-    normal,
-    insert,
-    visual,
-    command,
-    replace,
-
-    pub fn fmt(self: Mode) []const u8 {
-        return switch (self) {
-            .normal => "NORMAL",
-            .insert => "INSERT",
-            .visual => "VISUAL",
-            .command => "COMMAND",
-            .replace => "REPLACE",
-        };
-    }
+    NORMAL,
+    INSERT,
+    VISUAL,
+    COMMAND,
+    REPLACE,
 };
 
 pub const Editor = struct {
     rows: std.ArrayList(Row) = .empty,
+    rows_shown: usize = 0,
     cursor_x: usize = 0,
     cursor_y: usize = 0,
     row_offset: usize = 0,
     col_offset: usize = 0,
     filename: ?[]u8 = null,
-    mode: Mode = .normal,
+    mode: Mode = .NORMAL,
 
     pub fn deinit(self: *Editor, allocator: mem.Allocator) void {
         for (self.rows.items) |*row| {
@@ -141,20 +137,6 @@ test "get current row" {
     try testing.expectEqualStrings("two", row.chars.items);
 }
 
-test "Mode fmt prints string" {
-    var document = Editor{};
-    document.mode = .normal;
-    try testing.expect(mem.eql(u8, document.mode.fmt(), "NORMAL"));
-    document.mode = .insert;
-    try testing.expect(mem.eql(u8, document.mode.fmt(), "INSERT"));
-    document.mode = .replace;
-    try testing.expect(mem.eql(u8, document.mode.fmt(), "REPLACE"));
-    document.mode = .visual;
-    try testing.expect(mem.eql(u8, document.mode.fmt(), "VISUAL"));
-    document.mode = .command;
-    try testing.expect(mem.eql(u8, document.mode.fmt(), "COMMAND"));
-}
-
 test "text inserts into row" {
     var document = Editor{};
     const allocator = testing.allocator;
@@ -164,5 +146,17 @@ test "text inserts into row" {
     const row = document.currentRow().?;
     try row.insertText(allocator, 0, "r");
 
-    try testing.expectEqualStrings(row.chars.items, "rHello");
+    try testing.expectEqualStrings("rHello", row.chars.items);
+}
+
+test "byte is removed from line" {
+    var document = Editor{};
+    const allocator = testing.allocator;
+    defer document.deinit(allocator);
+
+    try document.appendRow(allocator, "Hello");
+    const row = document.currentRow().?;
+    document.cursor_x = 3;
+    row.removeByte(document.cursor_x - 1);
+    try testing.expectEqualStrings("Helo", row.chars.items);
 }
