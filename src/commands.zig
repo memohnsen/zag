@@ -25,6 +25,12 @@
 /// - A to enter insert mode at the end of the row
 /// - i to enter insert mode to the left of the cursor
 /// - I to enter insert mode to the left of the first char in the row
+/// - o to enter insert mode and add a new line below the current
+/// - O to enter insert mode and add a new line above the current
+///
+/// ###Text Deletion
+/// - backspace to remove a char
+/// - dd to delete the current line
 ///
 /// ###Modes
 /// - r / R to enter replace mode ( does nothing currently )
@@ -38,6 +44,7 @@ const editor = @import("editor.zig");
 
 pub const State = struct {
     pending_g: bool = false,
+    pending_d: bool = false,
 };
 
 const Command = enum {
@@ -67,6 +74,8 @@ const Command = enum {
 
     // DELETION
     remove_left,
+    delete_line,
+    delete_line_remaining,
 
     // MODES
     normal,
@@ -86,6 +95,8 @@ pub fn handleKey(
     // load pending state into a const so we don't have to false it every branch
     const pending_g = state.pending_g;
     state.pending_g = false;
+    const pending_d = state.pending_d;
+    state.pending_d = false;
 
     const command = commandFromKey(key, document, pending_g);
 
@@ -166,6 +177,9 @@ pub fn handleKey(
             document.mode = .INSERT;
         },
         .new_line_down => {
+            if (document.rows.items.len == 0) {
+                try document.insertRow(allocator, "", document.cursor_y);
+            }
             try document.insertRow(allocator, "", document.cursor_y + 1);
             document.cursor_y += 1;
             document.cursor_x = 0;
@@ -179,12 +193,24 @@ pub fn handleKey(
                 }
             }
         },
+        .delete_line => {
+            if (pending_d) {
+                try document.removeRow(allocator, document.cursor_y);
+                state.pending_d = false;
+            } else {
+                state.pending_d = true;
+            }
+        },
+        .delete_line_remaining => {
+            try document.deleteRemainingLine();
+        },
         .visual => document.mode = .VISUAL,
         .command => document.mode = .COMMAND,
         .replace => document.mode = .REPLACE,
 
         .other => {
             state.pending_g = false;
+            state.pending_d = false;
             if (document.mode == .INSERT) {
                 if (key.text) |text| {
                     try document.insertText(allocator, text);
@@ -232,6 +258,8 @@ fn commandFromKey(key: vaxis.Key, document: *editor.Editor, pending_g: bool) Com
 
     // DELETION
     if (key.matches(vaxis.Key.backspace, .{}) and document.mode == .INSERT) return .remove_left;
+    if (key.matches('d', .{}) and document.mode == .NORMAL) return .delete_line;
+    if (key.matches('D', .{}) and document.mode == .NORMAL) return .delete_line_remaining;
 
     // MODES
     if (key.matches('r', .{}) and document.mode == .NORMAL) return .replace;
@@ -576,6 +604,7 @@ test "new line up and down with vim keys" {
     try testing.expect(!(try handleKey(.{ .codepoint = 'o' }, &document, &state, allocator)));
     try testing.expect(document.mode == .INSERT);
     try testing.expect(document.cursor_x == 0);
+    try testing.expect(document.cursor_y == 1);
     try testing.expect(document.rows.items.len == 2);
     try testing.expectEqualStrings("first", document.rows.items[0].chars.items);
     try testing.expectEqualStrings("", document.rows.items[1].chars.items);
@@ -585,8 +614,86 @@ test "new line up and down with vim keys" {
     try testing.expect(!(try handleKey(.{ .codepoint = 'O' }, &document, &state, allocator)));
     try testing.expect(document.mode == .INSERT);
     try testing.expect(document.cursor_x == 0);
+    try testing.expect(document.cursor_y == 0);
     try testing.expect(document.rows.items.len == 3);
     try testing.expectEqualStrings("", document.rows.items[0].chars.items);
     try testing.expectEqualStrings("first", document.rows.items[1].chars.items);
     try testing.expectEqualStrings("", document.rows.items[2].chars.items);
+}
+
+test "inserting new line on empty file enter" {
+    const allocator = testing.allocator;
+    var document: editor.Editor = .{};
+    defer document.deinit(allocator);
+    var state: State = .{};
+
+    document.mode = .INSERT;
+    try testing.expect(document.rows.items.len == 0);
+    try testing.expect(!(try handleKey(.{ .codepoint = vaxis.Key.enter }, &document, &state, allocator)));
+    try testing.expect(document.cursor_x == 0);
+    try testing.expect(document.cursor_y == 1);
+    try testing.expect(document.rows.items.len == 2);
+    try testing.expectEqualStrings("", document.rows.items[0].chars.items);
+    try testing.expectEqualStrings("", document.rows.items[1].chars.items);
+}
+
+test "inserting new line on empty file o" {
+    const allocator = testing.allocator;
+    var document: editor.Editor = .{};
+    defer document.deinit(allocator);
+    var state: State = .{};
+
+    try testing.expect(document.rows.items.len == 0);
+    try testing.expect(!(try handleKey(.{ .codepoint = 'o' }, &document, &state, allocator)));
+    try testing.expect(document.mode == .INSERT);
+    try testing.expect(document.cursor_x == 0);
+    try testing.expect(document.cursor_y == 1);
+    try testing.expect(document.rows.items.len == 2);
+    try testing.expectEqualStrings("", document.rows.items[0].chars.items);
+    try testing.expectEqualStrings("", document.rows.items[1].chars.items);
+}
+
+test "inserting new line on empty file O" {
+    const allocator = testing.allocator;
+    var document: editor.Editor = .{};
+    defer document.deinit(allocator);
+    var state: State = .{};
+
+    try testing.expect(document.rows.items.len == 0);
+    try testing.expect(!(try handleKey(.{ .codepoint = 'O' }, &document, &state, allocator)));
+    try testing.expect(document.mode == .INSERT);
+    try testing.expect(document.cursor_x == 0);
+    try testing.expect(document.cursor_y == 0);
+    try testing.expect(document.rows.items.len == 1);
+    try testing.expectEqualStrings("", document.rows.items[0].chars.items);
+}
+
+test "removing line with dd" {
+    const allocator = testing.allocator;
+    var document: editor.Editor = .{};
+    defer document.deinit(allocator);
+    var state: State = .{};
+
+    try document.appendRow(allocator, "hello");
+    try document.appendRow(allocator, "world");
+    document.cursor_y = 1;
+
+    try testing.expect(document.rows.items.len == 2);
+    try testing.expect(!(try handleKey(.{ .codepoint = 'd' }, &document, &state, allocator)));
+    try testing.expect(!(try handleKey(.{ .codepoint = 'd' }, &document, &state, allocator)));
+    try testing.expect(document.rows.items.len == 1);
+    try testing.expectEqualStrings("hello", document.rows.items[0].chars.items);
+}
+
+test "removing remainder of line with D" {
+    const allocator = testing.allocator;
+    var document: editor.Editor = .{};
+    defer document.deinit(allocator);
+    var state: State = .{};
+
+    try document.appendRow(allocator, "hello");
+    document.cursor_x = 1;
+
+    try testing.expect(!(try handleKey(.{ .codepoint = 'D' }, &document, &state, allocator)));
+    try testing.expectEqualStrings("h", document.rows.items[0].chars.items);
 }

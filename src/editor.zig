@@ -64,6 +64,28 @@ pub const Editor = struct {
         try self.rows.append(allocator, row);
     }
 
+    pub fn removeRow(self: *Editor, allocator: mem.Allocator, index: usize) !void {
+        if (index < self.rows.items.len) {
+            var row = self.rows.orderedRemove(index);
+            row.deinit(allocator);
+            self.cursor_y = self.cursor_y -| 1;
+        }
+    }
+
+    pub fn deleteRemainingLine(
+        self: *Editor,
+    ) !void {
+        const y = self.cursor_y;
+        const x = self.cursor_x;
+
+        if (self.rows.items.len == 0) {
+            return;
+        }
+
+        const og_row = &self.rows.items[y];
+        og_row.chars.shrinkRetainingCapacity(x);
+    }
+
     pub fn insertRow(
         self: *Editor,
         allocator: mem.Allocator,
@@ -85,22 +107,16 @@ pub const Editor = struct {
         const y = self.cursor_y;
         const x = self.cursor_x;
 
+        if (self.rows.items.len == 0) {
+            try self.insertRow(allocator, "", self.cursor_y);
+        }
+
         const remaining_row_chars = self.rows.items[y].chars.items[x..];
         try self.insertRow(allocator, remaining_row_chars, y + 1);
 
         const og_row = &self.rows.items[y];
         og_row.chars.shrinkRetainingCapacity(x);
         self.cursor_y = y + 1;
-        self.cursor_x = 0;
-    }
-
-    pub fn insertNewLineBlank(
-        self: *Editor,
-        allocator: mem.Allocator,
-    ) !void {
-        try self.insertRow(allocator, "", self.cursor_y + 1);
-
-        self.cursor_y += 1;
         self.cursor_x = 0;
     }
 
@@ -228,4 +244,42 @@ test "inserting new line" {
     try testing.expectEqualStrings(" world", document.rows.items[1].chars.items);
     try testing.expect(document.cursor_y == 1);
     try testing.expect(document.cursor_x == 0);
+}
+
+test "inserting new line on empty file" {
+    const allocator = testing.allocator;
+    var document = Editor{};
+    defer document.deinit(allocator);
+
+    try document.insertNewLine(allocator);
+    try testing.expect(document.rows.items.len == 2);
+    try testing.expect(document.cursor_y == 1);
+    try testing.expect(document.cursor_x == 0);
+}
+
+test "removing line" {
+    const allocator = testing.allocator;
+    var document = Editor{};
+    defer document.deinit(allocator);
+
+    try document.appendRow(allocator, "hello");
+    try document.appendRow(allocator, "world");
+    document.cursor_y = 1;
+
+    try testing.expect(document.rows.items.len == 2);
+    try document.removeRow(allocator, document.cursor_y);
+    try testing.expect(document.rows.items.len == 1);
+    try testing.expectEqualStrings("hello", document.rows.items[0].chars.items);
+}
+
+test "removing remainder of line" {
+    const allocator = testing.allocator;
+    var document = Editor{};
+    defer document.deinit(allocator);
+
+    try document.appendRow(allocator, "hello");
+    document.cursor_x = 1;
+
+    try document.deleteRemainingLine();
+    try testing.expectEqualStrings("h", document.rows.items[0].chars.items);
 }
