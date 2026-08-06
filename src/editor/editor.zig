@@ -269,6 +269,32 @@ test "removing line" {
     try testing.expectEqualStrings("hello", document.rows.items[0].chars.items);
 }
 
+test "removing line on empty row" {
+    const allocator = testing.allocator;
+    var document = Editor{};
+    defer document.deinit(allocator);
+
+    try document.appendRow(allocator, "hello");
+    try document.appendRow(allocator, "");
+    try document.appendRow(allocator, "world");
+    document.cursor_y = 1;
+
+    try testing.expect(document.rows.items.len == 3);
+    try document.removeRow(allocator, document.cursor_y);
+    try testing.expect(document.rows.items.len == 2);
+    try testing.expectEqualStrings("hello", document.rows.items[0].chars.items);
+    try testing.expectEqualStrings("world", document.rows.items[1].chars.items);
+}
+
+test "removing line does nothing on empty file" {
+    const allocator = testing.allocator;
+    var document = Editor{};
+    defer document.deinit(allocator);
+
+    try document.removeRow(allocator, document.cursor_y);
+    try testing.expect(document.rows.items.len == 0);
+}
+
 test "removing remainder of line" {
     const allocator = testing.allocator;
     var document = Editor{};
