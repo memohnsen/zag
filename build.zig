@@ -21,6 +21,14 @@ pub fn build(b: *std.Build) void {
     const exe = b.addExecutable(.{ .name = "zag", .root_module = exe_mod });
     b.installArtifact(exe);
 
+    // Let ZLS type-check the project on save without emitting a binary.
+    const exe_check = b.addExecutable(.{
+        .name = "zag-check",
+        .root_module = exe_mod,
+    });
+    const check_step = b.step("check", "Check if zag compiles");
+    check_step.dependOn(&exe_check.step);
+
     const run_step = b.step("run", "Run the Zag editor");
     const run_cmd = b.addRunArtifact(exe);
     run_step.dependOn(&run_cmd.step);

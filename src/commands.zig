@@ -563,6 +563,19 @@ test "empty text on other keypress" {
     try testing.expect(document.rows.items.len == 0);
 }
 
+test "backspace moves left in normal mode" {
+    const allocator = testing.allocator;
+    var document: editor.Editor = .{};
+    defer document.deinit(allocator);
+    var state: State = .{};
+
+    try document.appendRow(allocator, "first");
+    document.cursor_x = 2;
+
+    try testing.expect(!(try handleKey(.{ .codepoint = vaxis.Key.backspace }, &document, &state, allocator)));
+    try testing.expect(document.cursor_x == 1);
+}
+
 test "backspace deletes char in insert mode" {
     const allocator = testing.allocator;
     var document: editor.Editor = .{};
@@ -583,32 +596,39 @@ test "backspace deletes char in insert mode" {
     try testing.expect(document.cursor_x == 1);
 }
 
-test "new line up and down with vim keys" {
+test "inserting new line with enter" {
     const allocator = testing.allocator;
     var document: editor.Editor = .{};
     defer document.deinit(allocator);
     var state: State = .{};
-    try document.appendRow(allocator, "first");
 
-    try testing.expect(document.rows.items.len == 1);
-    try testing.expect(!(try handleKey(.{ .codepoint = 'o' }, &document, &state, allocator)));
-    try testing.expect(document.mode == .INSERT);
+    try document.appendRow(allocator, "hello");
+
+    try testing.expect(!(try handleKey(.{ .codepoint = 'A' }, &document, &state, allocator)));
+    try testing.expect(!(try handleKey(.{ .codepoint = vaxis.Key.enter }, &document, &state, allocator)));
     try testing.expect(document.cursor_x == 0);
     try testing.expect(document.cursor_y == 1);
     try testing.expect(document.rows.items.len == 2);
-    try testing.expectEqualStrings("first", document.rows.items[0].chars.items);
+    try testing.expectEqualStrings("hello", document.rows.items[0].chars.items);
     try testing.expectEqualStrings("", document.rows.items[1].chars.items);
+}
 
-    document.cursor_y = 0;
-    document.mode = .NORMAL;
-    try testing.expect(!(try handleKey(.{ .codepoint = 'O' }, &document, &state, allocator)));
-    try testing.expect(document.mode == .INSERT);
+test "inserting new line with enter within word" {
+    const allocator = testing.allocator;
+    var document: editor.Editor = .{};
+    defer document.deinit(allocator);
+    var state: State = .{};
+
+    try document.appendRow(allocator, "hello");
+    document.cursor_x = 2;
+
+    try testing.expect(!(try handleKey(.{ .codepoint = 'a' }, &document, &state, allocator)));
+    try testing.expect(!(try handleKey(.{ .codepoint = vaxis.Key.enter }, &document, &state, allocator)));
     try testing.expect(document.cursor_x == 0);
-    try testing.expect(document.cursor_y == 0);
-    try testing.expect(document.rows.items.len == 3);
-    try testing.expectEqualStrings("", document.rows.items[0].chars.items);
-    try testing.expectEqualStrings("first", document.rows.items[1].chars.items);
-    try testing.expectEqualStrings("", document.rows.items[2].chars.items);
+    try testing.expect(document.cursor_y == 1);
+    try testing.expect(document.rows.items.len == 2);
+    try testing.expectEqualStrings("hel", document.rows.items[0].chars.items);
+    try testing.expectEqualStrings("lo", document.rows.items[1].chars.items);
 }
 
 test "inserting new line on empty file enter" {
@@ -627,6 +647,26 @@ test "inserting new line on empty file enter" {
     try testing.expectEqualStrings("", document.rows.items[1].chars.items);
 }
 
+test "inserting new line below with o" {
+    const allocator = testing.allocator;
+    var document: editor.Editor = .{};
+    defer document.deinit(allocator);
+    var state: State = .{};
+
+    try document.appendRow(allocator, "hello");
+    try document.appendRow(allocator, "world");
+    document.cursor_y = 0;
+
+    try testing.expect(!(try handleKey(.{ .codepoint = 'o' }, &document, &state, allocator)));
+    try testing.expect(document.mode == .INSERT);
+    try testing.expect(document.cursor_x == 0);
+    try testing.expect(document.cursor_y == 1);
+    try testing.expect(document.rows.items.len == 3);
+    try testing.expectEqualStrings("hello", document.rows.items[0].chars.items);
+    try testing.expectEqualStrings("", document.rows.items[1].chars.items);
+    try testing.expectEqualStrings("world", document.rows.items[2].chars.items);
+}
+
 test "inserting new line on empty file o" {
     const allocator = testing.allocator;
     var document: editor.Editor = .{};
@@ -641,6 +681,26 @@ test "inserting new line on empty file o" {
     try testing.expect(document.rows.items.len == 2);
     try testing.expectEqualStrings("", document.rows.items[0].chars.items);
     try testing.expectEqualStrings("", document.rows.items[1].chars.items);
+}
+
+test "inserting new line above with O" {
+    const allocator = testing.allocator;
+    var document: editor.Editor = .{};
+    defer document.deinit(allocator);
+    var state: State = .{};
+
+    try document.appendRow(allocator, "hello");
+    try document.appendRow(allocator, "world");
+    document.cursor_y = 0;
+
+    try testing.expect(!(try handleKey(.{ .codepoint = 'O' }, &document, &state, allocator)));
+    try testing.expect(document.mode == .INSERT);
+    try testing.expect(document.cursor_x == 0);
+    try testing.expect(document.cursor_y == 0);
+    try testing.expect(document.rows.items.len == 3);
+    try testing.expectEqualStrings("", document.rows.items[0].chars.items);
+    try testing.expectEqualStrings("hello", document.rows.items[1].chars.items);
+    try testing.expectEqualStrings("world", document.rows.items[2].chars.items);
 }
 
 test "inserting new line on empty file O" {
@@ -687,6 +747,17 @@ test "removing line with dd" {
     try testing.expect(document.cursor_y == 1);
 }
 
+test "deleting line with dd does nothing on empty line" {
+    const allocator = testing.allocator;
+    var document: editor.Editor = .{};
+    defer document.deinit(allocator);
+    var state: State = .{};
+
+    try testing.expect(!(try handleKey(.{ .codepoint = 'd' }, &document, &state, allocator)));
+    try testing.expect(!(try handleKey(.{ .codepoint = 'd' }, &document, &state, allocator)));
+    try testing.expect(document.rows.items.len == 0);
+}
+
 test "removing remainder of line with D" {
     const allocator = testing.allocator;
     var document: editor.Editor = .{};
@@ -698,6 +769,18 @@ test "removing remainder of line with D" {
 
     try testing.expect(!(try handleKey(.{ .codepoint = 'D' }, &document, &state, allocator)));
     try testing.expectEqualStrings("h", document.rows.items[0].chars.items);
+}
+
+test "removing remainder of line with D does nothing in empty line" {
+    const allocator = testing.allocator;
+    var document: editor.Editor = .{};
+    defer document.deinit(allocator);
+    var state: State = .{};
+
+    try testing.expect(!(try handleKey(.{ .codepoint = 'D' }, &document, &state, allocator)));
+    try testing.expect(document.cursor_y == 0);
+    try testing.expect(document.cursor_x == 0);
+    try testing.expect(document.rows.items.len == 0);
 }
 
 test "joining row with prev row" {
@@ -718,6 +801,23 @@ test "joining row with prev row" {
     try testing.expectEqualStrings("hello world", document.rows.items[0].chars.items);
 }
 
+test "joining row with prev row does nothing at top of file" {
+    const allocator = testing.allocator;
+    var document: editor.Editor = .{};
+    defer document.deinit(allocator);
+    var state: State = .{};
+
+    try document.appendRow(allocator, "hello");
+    document.cursor_y = 0;
+    document.cursor_x = 0;
+    document.mode = .INSERT;
+
+    try testing.expect(!(try handleKey(.{ .codepoint = vaxis.Key.backspace }, &document, &state, allocator)));
+    try testing.expect(document.cursor_y == 0);
+    try testing.expect(document.rows.items.len == 1);
+    try testing.expectEqualStrings("hello", document.rows.items[0].chars.items);
+}
+
 test "join row with next row" {
     const allocator = testing.allocator;
     var document: editor.Editor = .{};
@@ -734,6 +834,16 @@ test "join row with next row" {
     try testing.expect(document.cursor_y == 0);
     try testing.expect(document.rows.items.len == 2);
     try testing.expectEqualStrings("hello world", document.rows.items[0].chars.items);
+}
+
+test "join row with next row does nothing at end of file" {
+    const allocator = testing.allocator;
+    var document: editor.Editor = .{};
+    defer document.deinit(allocator);
+    var state: State = .{};
+
+    try document.appendRow(allocator, "hello");
+    try document.appendRow(allocator, " world");
 
     document.cursor_y = 1;
     try testing.expect(!(try handleKey(.{ .codepoint = 'J' }, &document, &state, allocator)));
@@ -747,10 +857,6 @@ test "x deletes char in normal mode" {
     defer document.deinit(allocator);
     var state: State = .{};
 
-    try testing.expect(!(try handleKey(.{ .codepoint = 'x' }, &document, &state, allocator)));
-    try testing.expect(document.rows.items.len == 0);
-    try testing.expect(document.cursor_x == 0);
-
     try document.appendRow(allocator, "first");
     document.cursor_x = 1;
 
@@ -759,7 +865,18 @@ test "x deletes char in normal mode" {
     try testing.expect(document.cursor_x == 1);
 }
 
-test "X deletes prev char in normal mode" {
+test "x does nothing in empty file / line" {
+    const allocator = testing.allocator;
+    var document: editor.Editor = .{};
+    defer document.deinit(allocator);
+    var state: State = .{};
+
+    try testing.expect(!(try handleKey(.{ .codepoint = 'x' }, &document, &state, allocator)));
+    try testing.expect(document.rows.items.len == 0);
+    try testing.expect(document.cursor_x == 0);
+}
+
+test "X does nothing in empty file / line" {
     const allocator = testing.allocator;
     var document: editor.Editor = .{};
     defer document.deinit(allocator);
@@ -768,6 +885,13 @@ test "X deletes prev char in normal mode" {
     try testing.expect(!(try handleKey(.{ .codepoint = 'X' }, &document, &state, allocator)));
     try testing.expect(document.rows.items.len == 0);
     try testing.expect(document.cursor_x == 0);
+}
+
+test "X deletes prev char in normal mode" {
+    const allocator = testing.allocator;
+    var document: editor.Editor = .{};
+    defer document.deinit(allocator);
+    var state: State = .{};
 
     try document.appendRow(allocator, "first");
     document.cursor_x = 1;

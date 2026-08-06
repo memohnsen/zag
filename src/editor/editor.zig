@@ -160,6 +160,20 @@ pub const Editor = struct {
             self.col_offset = self.cursor_x - screen_cols + 1;
         }
     }
+
+    pub fn toOwnedText(self: *const Editor, allocator: mem.Allocator) ![]u8 {
+        var list: std.ArrayList(u8) = .empty;
+        errdefer list.deinit(allocator);
+
+        for (self.rows.items, 0..) |row, index| {
+            if (index != 0) {
+                try list.append(allocator, '\n');
+            }
+            try list.appendSlice(allocator, row.chars.items);
+        }
+
+        return try list.toOwnedSlice(allocator);
+    }
 };
 
 test "appending rows" {
@@ -282,6 +296,20 @@ test "join row with prev row" {
     try testing.expectEqualStrings("hello world", document.rows.items[0].chars.items);
 }
 
+test "join row with prev empty row" {
+    const allocator = testing.allocator;
+    var document = Editor{};
+    defer document.deinit(allocator);
+
+    try document.appendRow(allocator, " world");
+    document.cursor_y = 0;
+    document.cursor_x = 0;
+
+    try document.joinWithPrevRow(allocator);
+    try testing.expect(document.rows.items.len == 1);
+    try testing.expectEqualStrings(" world", document.rows.items[0].chars.items);
+}
+
 test "join row with next row" {
     const allocator = testing.allocator;
     var document = Editor{};
@@ -295,4 +323,57 @@ test "join row with next row" {
     try document.joinWithNextRow(allocator);
     try testing.expect(document.rows.items.len == 1);
     try testing.expectEqualStrings("hello world", document.rows.items[0].chars.items);
+}
+
+test "join row with next empty row" {
+    const allocator = testing.allocator;
+    var document = Editor{};
+    defer document.deinit(allocator);
+
+    try document.appendRow(allocator, "hello");
+    try document.appendRow(allocator, " world");
+    document.cursor_y = 1;
+    document.cursor_x = 0;
+
+    try document.joinWithNextRow(allocator);
+    try testing.expect(document.rows.items.len == 2);
+    try testing.expectEqualStrings(" world", document.rows.items[1].chars.items);
+}
+
+test "transfering row to owned text" {
+    const allocator = testing.allocator;
+    var document = Editor{};
+    defer document.deinit(allocator);
+
+    try document.appendRow(allocator, "hello");
+    try document.appendRow(allocator, "world");
+
+    const owned = try document.toOwnedText(allocator);
+    defer allocator.free(owned);
+    try testing.expectEqualStrings("hello\nworld", owned);
+}
+
+test "transfering row to owned text with empty line" {
+    const allocator = testing.allocator;
+    var document = Editor{};
+    defer document.deinit(allocator);
+
+    try document.appendRow(allocator, "hello");
+    try document.appendRow(allocator, "");
+
+    const owned = try document.toOwnedText(allocator);
+    defer allocator.free(owned);
+    try testing.expectEqualStrings("hello\n", owned);
+}
+
+test "transfering row to owned text with no rows" {
+    const allocator = testing.allocator;
+    var document = Editor{};
+    defer document.deinit(allocator);
+
+    try document.appendRow(allocator, "");
+
+    const owned = try document.toOwnedText(allocator);
+    defer allocator.free(owned);
+    try testing.expectEqualStrings("", owned);
 }

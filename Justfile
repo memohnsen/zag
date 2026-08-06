@@ -12,4 +12,5 @@ build:
 
 # Run the full test suite
 test:
+    zig build check
     zig build test
