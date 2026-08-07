@@ -1,6 +1,7 @@
 const std = @import("std");
 const vaxis = @import("vaxis");
 const editor = @import("editor/editor.zig");
+const state = @import("editor/state.zig");
 
 const welcome_text = "Zag Editor -- Version 0.1.0";
 
@@ -8,24 +9,35 @@ pub fn refresh(
     vx: *vaxis.Vaxis,
     tty: *std.Io.Writer,
     document: *const editor.Editor,
+    editor_state: *const state.State,
 ) !void {
     const window = vx.window();
     window.clear();
     drawRows(window, document);
 
-    var file_buf: [256]u8 = undefined;
+    var status_buf: [256]u8 = undefined;
     var cursor_buf: [256]u8 = undefined;
-    try drawStatusBar(window, document, file_buf[0..], cursor_buf[0..]);
+    try drawStatusBar(window, document, status_buf[0..], cursor_buf[0..]);
 
-    const screen_x = document.cursor_x - document.col_offset;
-    const screen_y = document.cursor_y - document.row_offset;
+    var command_buf: [256]u8 = undefined;
+    try drawCommandBar(window, editor_state, command_buf[0..]);
+
+    var screen_x: usize = 0;
+    var screen_y: usize = 0;
+    if (document.mode == .COMMAND) {
+        screen_x = editor_state.command_cursor_x;
+        screen_y = window.height -| 1;
+    } else {
+        screen_x = document.cursor_x - document.col_offset;
+        screen_y = document.cursor_y - document.row_offset;
+    }
     window.showCursor(@intCast(screen_x), @intCast(screen_y));
 
     try vx.render(tty);
 }
 
 fn drawRows(window: vaxis.Window, document: *const editor.Editor) void {
-    const text_height = window.height -| 1;
+    const text_height = window.height -| 2;
     for (0..text_height) |screen_row| {
         const file_row = document.row_offset + screen_row;
 
@@ -54,7 +66,7 @@ fn drawStatusBar(
         return;
     }
 
-    const status_window = window.child(.{ .y_off = @intCast(window.height -| 1), .height = 1 });
+    const status_window = window.child(.{ .y_off = @intCast(window.height -| 2), .height = 1 });
     status_window.fill(.{ .style = .{ .reverse = true } });
 
     // Show filename and lines in file
@@ -67,6 +79,21 @@ fn drawStatusBar(
     const text_width: u16 = @intCast(cursor_text.len);
     const text_col = status_window.width -| text_width;
     _ = status_window.printSegment(.{ .text = cursor_text, .style = .{ .reverse = true } }, .{ .wrap = .none, .col_offset = text_col });
+}
+
+fn drawCommandBar(
+    window: vaxis.Window,
+    editor_state: *const state.State,
+    buf: []u8,
+) !void {
+    if (window.height == 0) {
+        return;
+    }
+
+    const status_window = window.child(.{ .y_off = @intCast(window.height -| 1), .height = 1 });
+
+    const file_text = try std.fmt.bufPrint(buf, "{s}", .{editor_state.command_buffer.items});
+    _ = status_window.printSegment(.{ .text = file_text }, .{ .wrap = .none });
 }
 
 fn drawWelcome(window: vaxis.Window, screen_row: usize) void {

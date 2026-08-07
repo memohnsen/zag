@@ -5,6 +5,7 @@ const vaxis = @import("vaxis");
 const ui = @import("ui.zig");
 const editor = @import("editor/editor.zig");
 const commands = @import("commands.zig");
+const state = @import("editor/state.zig");
 
 const Event = union(enum) {
     key_press: vaxis.Key,
@@ -45,13 +46,19 @@ fn run(init: std.process.Init) !void {
     try vx.enterAltScreen(tty.writer());
     try vx.queryTerminal(tty.writer(), .fromSeconds(1));
 
-    var command_state: commands.State = .{};
+    var editor_state: state.State = .{};
+    defer editor_state.deinit(gpa);
 
     while (true) {
         const event = try event_loop.nextEvent();
         switch (event) {
             .key_press => |key| {
-                if (try commands.handleKey(key, &document, &command_state, gpa)) break;
+                if (try commands.handleKey(key, &document, &editor_state, gpa)) break;
+
+                if (editor_state.save_requested) {
+                    editor_state.save_requested = false;
+                    try document.saveFile(gpa, io, std.Io.Dir.cwd());
+                }
             },
             .winsize => |size| {
                 try vx.resize(gpa, tty.writer(), size);
@@ -59,9 +66,9 @@ fn run(init: std.process.Init) !void {
         }
 
         const window = vx.window();
-        const text_height = window.height -| 1;
+        const text_height = window.height -| 2;
         document.scroll(text_height, window.width);
-        try ui.refresh(&vx, tty.writer(), &document);
+        try ui.refresh(&vx, tty.writer(), &document, &editor_state);
         document.rows_shown = vx.window().height;
     }
 }
@@ -120,4 +127,5 @@ test "all" {
     _ = @import("editor/editor.zig");
     _ = @import("ui.zig");
     _ = @import("editor/row.zig");
+    _ = @import("editor/state.zig");
 }

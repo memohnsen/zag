@@ -1,0 +1,11 @@
+* Roadmap for Zag
+** Coming Soon
+- [ ] Finsh wiring up command buffer
+- [ ] basic config file
+
+** Far off
+- [ ] file tab line
+- [ ] session management
+- [ ] windows
+- [ ] Add text highlighting
+- [ ] Add treesitter

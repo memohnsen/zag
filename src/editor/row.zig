@@ -3,6 +3,7 @@ const mem = std.mem;
 const testing = std.testing;
 
 pub const Row = struct {
+    // the actual text in each row of the file
     chars: std.ArrayList(u8) = .empty,
 
     pub fn deinit(self: *Row, allocator: mem.Allocator) void {

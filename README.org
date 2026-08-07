@@ -2,6 +2,8 @@
 
 Zag is a terminal text editor written in zig following the Kilo tutorial in C by [[https://viewsourcecode.org/snaptoken/kilo/index.html][Snaptoken]]
 
+The goal of Zag is to become an opinionated text editor with a fair amount of tools included and an extension system in Lua that allows for easy reuse of neovim plugins. Pretty far off from that now, but a boy can dream.
+
 Zag comes with most of the vim motions for manipulating and editing text.
 
 ** Available keybindings
@@ -24,6 +26,14 @@ Zag comes with most of the vim motions for manipulating and editing text.
  - <M> to move to middle line of screen
  - <Ctrl-d> to go down half the screen
  - <Ctrl-u> to go up half the screen
+
+***** Upcoming
+- <b> move back one word to the first char
+- <B> move back until next space to the first char
+- <w> move forward one word to the first char
+- <W> move forward until next space to the first char
+- <e> move forward one word to the last char
+- <E> move forward until next space to the last char
 
 **** Text Insertion
  - <a> to enter insert mode to the right of the cursor
@@ -48,7 +58,7 @@ Zag comes with most of the vim motions for manipulating and editing text.
  - <v> / <V> to enter visual mode ( does nothing currently )
 
 ** Working with Zag
-Zag is written using the latest stable release of Zig 0.16
+Zag is written using the latest stable release of Zig (0.16)
 
 You can use the Zig build system to build and run the project
 #+begin_src bash

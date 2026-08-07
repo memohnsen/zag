@@ -12,11 +12,15 @@ pub const Mode = enum {
 };
 
 pub const Editor = struct {
+    // the total rows of the file
     rows: std.ArrayList(Row) = .empty,
+    // the current rows shown on the terminal
     rows_shown: usize = 0,
     cursor_x: usize = 0,
     cursor_y: usize = 0,
+    // which row is currently the top row shown on the screen
     row_offset: usize = 0,
+    // which col is currently the leftmost shown on the screen
     col_offset: usize = 0,
     filename: ?[]u8 = null,
     mode: Mode = .NORMAL,
@@ -173,6 +177,22 @@ pub const Editor = struct {
         }
 
         return try list.toOwnedSlice(allocator);
+    }
+
+    pub fn saveFile(
+        self: *Editor,
+        allocator: mem.Allocator,
+        io: std.Io,
+        dir: std.Io.Dir,
+    ) !void {
+        if (self.filename) |filename| {
+            const text = try self.toOwnedText(allocator);
+            defer allocator.free(text);
+
+            try dir.writeFile(io, .{ .sub_path = filename, .data = text });
+        } else {
+            return error.NoFileName;
+        }
     }
 };
 
@@ -392,7 +412,7 @@ test "transfering row to owned text with empty line" {
     try testing.expectEqualStrings("hello\n", owned);
 }
 
-test "transfering row to owned text with no rows" {
+test "transfering row to owned text with empty rows" {
     const allocator = testing.allocator;
     var document = Editor{};
     defer document.deinit(allocator);
@@ -402,4 +422,57 @@ test "transfering row to owned text with no rows" {
     const owned = try document.toOwnedText(allocator);
     defer allocator.free(owned);
     try testing.expectEqualStrings("", owned);
+}
+
+test "transfering row to owned text with no rows" {
+    const allocator = testing.allocator;
+    var document = Editor{};
+    defer document.deinit(allocator);
+
+    const owned = try document.toOwnedText(allocator);
+    defer allocator.free(owned);
+    try testing.expectEqualStrings("", owned);
+}
+
+test "saving file with text" {
+    const allocator = testing.allocator;
+    const io = testing.io;
+    var tmp = testing.tmpDir(.{});
+    defer tmp.cleanup();
+    var document = Editor{};
+    defer document.deinit(allocator);
+
+    document.filename = try allocator.dupe(u8, "test.txt");
+    try document.appendRow(allocator, "hello");
+    try document.appendRow(allocator, "world");
+
+    try document.saveFile(allocator, io, tmp.dir);
+
+    const saved = try tmp.dir.readFileAlloc(io, "test.txt", allocator, .limited(1024));
+    defer allocator.free(saved);
+
+    try testing.expectEqualStrings("hello\nworld", saved);
+}
+
+test "saving file overwrites old data" {
+    const allocator = testing.allocator;
+    const io = testing.io;
+    var document = Editor{};
+    defer document.deinit(allocator);
+
+    var tmp = testing.tmpDir(.{});
+    defer tmp.cleanup();
+    const file = try tmp.dir.createFile(io, "test.txt", .{});
+    defer file.close(io);
+    try file.writeStreamingAll(io, "hello\nworld");
+
+    document.filename = try allocator.dupe(u8, "test.txt");
+    try document.appendRow(allocator, "new contents");
+
+    try document.saveFile(allocator, io, tmp.dir);
+
+    const saved = try tmp.dir.readFileAlloc(io, "test.txt", allocator, .limited(1024));
+    defer allocator.free(saved);
+
+    try testing.expectEqualStrings("new contents", saved);
 }
