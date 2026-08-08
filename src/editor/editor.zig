@@ -141,6 +141,21 @@ pub const Editor = struct {
         self.cursor_x += input.len;
     }
 
+    pub fn replaceChar(
+        self: *Editor,
+        allocator: mem.Allocator,
+        input: []const u8,
+        index: usize,
+    ) !void {
+        const row = self.currentRow() orelse return;
+        if (index >= row.chars.items.len) {
+            return;
+        }
+
+        self.rows.items[self.cursor_y].removeByte(index);
+        try self.rows.items[self.cursor_y].insertText(allocator, index, input);
+    }
+
     pub fn currentRow(self: *Editor) ?*Row {
         if (self.cursor_y >= self.rows.items.len) {
             return null;
@@ -473,4 +488,35 @@ test "saving file overwrites old data" {
     defer allocator.free(saved);
 
     try testing.expectEqualStrings("new contents", saved);
+}
+
+test "replacing char works on text" {
+    const allocator = testing.allocator;
+    var document = Editor{};
+    defer document.deinit(allocator);
+
+    try document.appendRow(allocator, "new contents");
+    document.cursor_x = 2;
+    try document.replaceChar(allocator, "e", document.cursor_x);
+    try testing.expectEqualStrings("nee contents", document.rows.items[0].chars.items);
+}
+
+test "replacing char does nothing on empty row" {
+    const allocator = testing.allocator;
+    var document = Editor{};
+    defer document.deinit(allocator);
+
+    try document.appendRow(allocator, "");
+    try document.replaceChar(allocator, "e", document.cursor_x);
+    try testing.expectEqual(1, document.rows.items.len);
+    try testing.expectEqualStrings("", document.rows.items[0].chars.items);
+}
+
+test "replacing char does nothing on empty file" {
+    const allocator = testing.allocator;
+    var document = Editor{};
+    defer document.deinit(allocator);
+
+    try document.replaceChar(allocator, "e", document.cursor_x);
+    try testing.expectEqual(0, document.rows.items.len);
 }

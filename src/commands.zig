@@ -44,6 +44,7 @@ const Command = enum {
     visual,
     replace,
 
+    // Text insertion
     other,
 };
 
@@ -215,7 +216,9 @@ pub fn handleKey(
             try editor_state.insertText(allocator, editor_state.command_cursor_x, ":");
             editor_state.command_cursor_x += 1;
         },
-        .replace => document.mode = .REPLACE,
+        .replace => {
+            document.mode = .REPLACE;
+        },
         .run_command => {
             if (std.mem.eql(u8, editor_state.command_buffer.items, ":w")) {
                 editor_state.save_requested = true;
@@ -238,6 +241,11 @@ pub fn handleKey(
                 if (key.text) |text| {
                     try editor_state.insertText(allocator, editor_state.command_cursor_x, text);
                     editor_state.command_cursor_x += text.len;
+                }
+            } else if (document.mode == .REPLACE) {
+                if (key.text) |text| {
+                    try document.replaceChar(allocator, text, document.cursor_x);
+                    document.mode = .NORMAL;
                 }
             }
         },
@@ -282,8 +290,7 @@ fn commandFromKey(key: vaxis.Key, document: *editor.Editor, pending_g: bool) Com
     if (key.matches('J', .{}) and document.mode == .NORMAL) return .join_next_line;
 
     // DELETION
-    if (key.matches(vaxis.Key.backspace, .{}) and document.mode == .INSERT) return .delete_left;
-    if (key.matches(vaxis.Key.backspace, .{}) and document.mode == .COMMAND) return .delete_left;
+    if (key.matches(vaxis.Key.backspace, .{}) and (document.mode == .INSERT or document.mode == .COMMAND)) return .delete_left;
     if (key.matches('x', .{}) and document.mode == .NORMAL) return .delete_current;
     if (key.matches('X', .{}) and document.mode == .NORMAL) return .delete_left;
     if (key.matches('d', .{}) and document.mode == .NORMAL) return .delete_line;
@@ -1103,4 +1110,30 @@ test ":wq saves and quits" {
     try testing.expect((try handleKey(.{ .codepoint = vaxis.Key.enter }, &document, &editor_state, allocator)));
     try testing.expectEqualStrings("hello\nworld", saved);
     try testing.expect(editor_state.save_requested == true);
+}
+
+test "replacing text with r" {
+    const allocator = testing.allocator;
+    var editor_state = state.State{};
+    var document: editor.Editor = .{};
+    defer document.deinit(allocator);
+    defer editor_state.deinit(allocator);
+
+    try document.appendRow(allocator, "hello");
+
+    document.cursor_y = 0;
+    document.cursor_x = 0;
+    try testing.expect(!(try handleKey(.{ .codepoint = 'r' }, &document, &editor_state, allocator)));
+    try testing.expect(document.mode == .REPLACE);
+    try testing.expect(!(try handleKey(.{ .codepoint = 'w', .text = "w" }, &document, &editor_state, allocator)));
+    try testing.expect(document.mode == .NORMAL);
+    try testing.expectEqualStrings("wello", document.rows.items[0].chars.items);
+
+    try document.appendRow(allocator, "");
+    document.cursor_y = 1;
+    try testing.expect(!(try handleKey(.{ .codepoint = 'r' }, &document, &editor_state, allocator)));
+    try testing.expect(document.mode == .REPLACE);
+    try testing.expect(!(try handleKey(.{ .codepoint = 'w', .text = "w" }, &document, &editor_state, allocator)));
+    try testing.expect(document.mode == .NORMAL);
+    try testing.expectEqualStrings("", document.rows.items[1].chars.items);
 }
