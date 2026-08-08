@@ -190,8 +190,6 @@ pub const Editor = struct {
             defer allocator.free(text);
 
             try dir.writeFile(io, .{ .sub_path = filename, .data = text });
-        } else {
-            return error.NoFileName;
         }
     }
 };

@@ -6,6 +6,7 @@ const ui = @import("ui.zig");
 const editor = @import("editor/editor.zig");
 const commands = @import("commands.zig");
 const state = @import("editor/state.zig");
+const notifs = @import("editor/notifications.zig");
 
 const Event = union(enum) {
     key_press: vaxis.Key,
@@ -54,19 +55,7 @@ fn run(init: std.process.Init) !void {
         switch (event) {
             .key_press => |key| {
                 const should_quit = try commands.handleKey(key, &document, &editor_state, gpa);
-
-                if (editor_state.save_requested) {
-                    try document.saveFile(gpa, io, std.Io.Dir.cwd());
-                    if (editor_state.save_requested) {
-                        if (document.filename) |file| {
-                            var notif_buf: [512]u8 = undefined;
-                            const text = try std.fmt.bufPrint(&notif_buf, "{s} has been successfully saved.", .{file});
-                            try editor_state.showNotification(&document, gpa, text, io);
-                        }
-                    }
-                    editor_state.save_requested = false;
-                }
-
+                try notifs.handleNotifications(&editor_state, &document, gpa, io);
                 if (should_quit) break;
             },
             .winsize => |size| {
@@ -79,7 +68,8 @@ fn run(init: std.process.Init) !void {
         document.scroll(text_height, window.width);
         editor_state.hideNotification(&document, io);
         try ui.refresh(&vx, tty.writer(), &document, &editor_state);
-        document.rows_shown = vx.window().height;
+        // subtract 2 lines due to command and status bar
+        document.rows_shown = vx.window().height - 2;
     }
 }
 
@@ -138,4 +128,5 @@ test "all" {
     _ = @import("ui.zig");
     _ = @import("editor/row.zig");
     _ = @import("editor/state.zig");
+    _ = @import("editor/notifications.zig");
 }

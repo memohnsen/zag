@@ -111,10 +111,16 @@ pub fn handleKey(
             editor_state.pending_g = false;
         },
         .middle => {
-            document.cursor_y = document.row_offset + document.rows_shown / 2 - 1;
+            document.cursor_y = document.row_offset + document.rows_shown / 2;
         },
         .page_down => {
-            document.cursor_y = document.cursor_y +| document.rows_shown / 2;
+            // y = 9, rows = 10, shown = 10
+            // y + rows_shown / 2 > rows.len
+            if (document.cursor_y + document.rows_shown / 2 > document.rows.items.len) {
+                document.cursor_y = document.rows.items.len - 1;
+            } else {
+                document.cursor_y = document.cursor_y +| document.rows_shown / 2;
+            }
         },
         .page_up => {
             document.cursor_y = document.cursor_y -| document.rows_shown / 2;
@@ -571,6 +577,59 @@ test "inserting text with commands" {
     try testing.expect(!(try handleKey(.{ .codepoint = 'n', .text = "n" }, &document, &editor_state, allocator)));
     try testing.expectEqualStrings("ban", document.rows.items[document.cursor_y].chars.items);
     try testing.expect(document.cursor_x == 3);
+}
+
+test "ctrl-u jumps half page up" {
+    const allocator = testing.allocator;
+    var editor_state = state.State{};
+    var document: editor.Editor = .{};
+    defer document.deinit(allocator);
+    defer editor_state.deinit(allocator);
+
+    document.rows_shown = 10;
+    document.cursor_y = 10;
+    try testing.expect(!(try handleKey(.{ .codepoint = 'u', .mods = .{ .ctrl = true } }, &document, &editor_state, allocator)));
+    try testing.expect(document.cursor_y == 5);
+    try testing.expect(!(try handleKey(.{ .codepoint = 'u', .mods = .{ .ctrl = true } }, &document, &editor_state, allocator)));
+    try testing.expect(document.cursor_y == 0);
+    try testing.expect(!(try handleKey(.{ .codepoint = 'u', .mods = .{ .ctrl = true } }, &document, &editor_state, allocator)));
+    try testing.expect(document.cursor_y == 0);
+}
+
+test "ctrl-d jumps half page down" {
+    const allocator = testing.allocator;
+    var editor_state = state.State{};
+    var document: editor.Editor = .{};
+    defer document.deinit(allocator);
+    defer editor_state.deinit(allocator);
+
+    try document.appendRow(allocator, "hello");
+    try document.appendRow(allocator, "hello");
+    try document.appendRow(allocator, "hello");
+    try document.appendRow(allocator, "hello");
+    try document.appendRow(allocator, "hello");
+    try document.appendRow(allocator, "hello");
+    try document.appendRow(allocator, "hello");
+    try document.appendRow(allocator, "hello");
+    try document.appendRow(allocator, "hello");
+    try document.appendRow(allocator, "hello");
+    try document.appendRow(allocator, "hello");
+
+    document.rows_shown = 10;
+    try testing.expect(!(try handleKey(.{ .codepoint = 'd', .mods = .{ .ctrl = true } }, &document, &editor_state, allocator)));
+    try testing.expectEqual(5, document.cursor_y);
+    try testing.expect(!(try handleKey(.{ .codepoint = 'd', .mods = .{ .ctrl = true } }, &document, &editor_state, allocator)));
+    try testing.expectEqual(10, document.cursor_y);
+    try testing.expect(!(try handleKey(.{ .codepoint = 'd', .mods = .{ .ctrl = true } }, &document, &editor_state, allocator)));
+    try testing.expectEqual(10, document.cursor_y);
+}
+
+test "M jumps to midscreen" {
+    const allocator = testing.allocator;
+    var editor_state = state.State{};
+    var document: editor.Editor = .{};
+    defer document.deinit(allocator);
+    defer editor_state.deinit(allocator);
 }
 
 test "empty text on other keypress" {
