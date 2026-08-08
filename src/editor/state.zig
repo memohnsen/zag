@@ -35,6 +35,7 @@ pub const State = struct {
 
     pub fn clearText(self: *State, document: *editor.Editor) void {
         self.command_buffer.clearRetainingCapacity();
+        self.notif_started = null;
         self.command_cursor_x = 0;
         document.mode = .NORMAL;
     }
@@ -49,12 +50,9 @@ pub const State = struct {
         self.clearText(document);
         try self.command_buffer.insertSlice(allocator, 0, text);
         self.notif_started = std.Io.Timestamp.now(io, .awake);
-        if (document.mode == .COMMAND) {
-            document.mode = .NORMAL;
-        }
     }
 
-    pub fn hideNotification(self: *State, document: *editor.Editor, io: std.Io) !void {
+    pub fn hideNotification(self: *State, document: *editor.Editor, io: std.Io) void {
         const started = self.notif_started orelse return;
         const now = std.Io.Timestamp.now(io, .awake);
         const elapsed = started.durationTo(now);
@@ -111,7 +109,7 @@ test "notifications hide after 3s" {
 
     const now = std.Io.Timestamp.now(io, .awake);
     editor_state.notif_started = now.subDuration(std.Io.Duration.fromSeconds(4));
-    try editor_state.hideNotification(&document, io);
+    editor_state.hideNotification(&document, io);
 
     try testing.expect(editor_state.command_cursor_x == 0);
     try testing.expect(document.mode == .NORMAL);

@@ -77,7 +77,7 @@ fn run(init: std.process.Init) !void {
         const window = vx.window();
         const text_height = window.height -| 2;
         document.scroll(text_height, window.width);
-        try editor_state.hideNotification(&document, io);
+        editor_state.hideNotification(&document, io);
         try ui.refresh(&vx, tty.writer(), &document, &editor_state);
         document.rows_shown = vx.window().height;
     }
