@@ -12,6 +12,7 @@ pub const State = struct {
     pending_d: bool = false,
 
     save_requested: bool = false,
+    notif_started: ?std.Io.Timestamp = null,
 
     pub fn deinit(self: *State, allocator: std.mem.Allocator) void {
         self.command_buffer.deinit(allocator);
@@ -37,6 +38,32 @@ pub const State = struct {
         self.command_cursor_x = 0;
         document.mode = .NORMAL;
     }
+
+    pub fn showNotification(
+        self: *State,
+        document: *editor.Editor,
+        allocator: mem.Allocator,
+        text: []const u8,
+        io: std.Io,
+    ) !void {
+        self.clearText(document);
+        try self.command_buffer.insertSlice(allocator, 0, text);
+        self.notif_started = std.Io.Timestamp.now(io, .awake);
+        if (document.mode == .COMMAND) {
+            document.mode = .NORMAL;
+        }
+    }
+
+    pub fn hideNotification(self: *State, document: *editor.Editor, io: std.Io) !void {
+        const started = self.notif_started orelse return;
+        const now = std.Io.Timestamp.now(io, .awake);
+        const elapsed = started.durationTo(now);
+
+        if (elapsed.toSeconds() >= 3) {
+            self.clearText(document);
+            self.notif_started = null;
+        }
+    }
 };
 
 test "text inserts into command bar" {
@@ -57,4 +84,36 @@ test "byte is removed from line" {
     try state.insertText(allocator, 0, "Hello");
     state.removeByte(2);
     try testing.expectEqualStrings("Helo", state.command_buffer.items);
+}
+
+test "notifications show in command line" {
+    const allocator = testing.allocator;
+    const io = testing.io;
+    var editor_state = State{};
+    defer editor_state.deinit(allocator);
+    var document = editor.Editor{};
+    defer document.deinit(allocator);
+
+    try editor_state.showNotification(&document, allocator, "File saved", io);
+    try testing.expectEqualStrings("File saved", editor_state.command_buffer.items);
+}
+
+test "notifications hide after 3s" {
+    const allocator = testing.allocator;
+    const io = testing.io;
+    var editor_state = State{};
+    defer editor_state.deinit(allocator);
+    var document = editor.Editor{};
+    defer document.deinit(allocator);
+
+    try editor_state.showNotification(&document, allocator, "File saved", io);
+    try testing.expectEqualStrings("File saved", editor_state.command_buffer.items);
+
+    const now = std.Io.Timestamp.now(io, .awake);
+    editor_state.notif_started = now.subDuration(std.Io.Duration.fromSeconds(4));
+    try editor_state.hideNotification(&document, io);
+
+    try testing.expect(editor_state.command_cursor_x == 0);
+    try testing.expect(document.mode == .NORMAL);
+    try testing.expect(editor_state.command_buffer.items.len == 0);
 }

@@ -56,8 +56,15 @@ fn run(init: std.process.Init) !void {
                 const should_quit = try commands.handleKey(key, &document, &editor_state, gpa);
 
                 if (editor_state.save_requested) {
-                    editor_state.save_requested = false;
                     try document.saveFile(gpa, io, std.Io.Dir.cwd());
+                    if (editor_state.save_requested) {
+                        if (document.filename) |file| {
+                            var notif_buf: [512]u8 = undefined;
+                            const text = try std.fmt.bufPrint(&notif_buf, "{s} has been successfully saved.", .{file});
+                            try editor_state.showNotification(&document, gpa, text, io);
+                        }
+                    }
+                    editor_state.save_requested = false;
                 }
 
                 if (should_quit) break;
@@ -70,6 +77,7 @@ fn run(init: std.process.Init) !void {
         const window = vx.window();
         const text_height = window.height -| 2;
         document.scroll(text_height, window.width);
+        try editor_state.hideNotification(&document, io);
         try ui.refresh(&vx, tty.writer(), &document, &editor_state);
         document.rows_shown = vx.window().height;
     }

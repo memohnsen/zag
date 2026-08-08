@@ -64,11 +64,21 @@ pub fn handleKey(
     switch (command) {
         // NAVIGATION
         .left => {
-            if (document.cursor_x > 0) document.cursor_x -= 1;
+            if (document.mode == .COMMAND) {
+                if (editor_state.command_cursor_x > 0) editor_state.command_cursor_x -= 1;
+            } else {
+                if (document.cursor_x > 0) document.cursor_x -= 1;
+            }
         },
         .right => {
-            if (document.currentRow()) |row| {
-                if (document.cursor_x + 1 < row.chars.items.len) document.cursor_x += 1;
+            if (document.mode == .COMMAND) {
+                if (editor_state.command_cursor_x + 1 < editor_state.command_buffer.items.len) {
+                    editor_state.command_cursor_x += 1;
+                }
+            } else {
+                if (document.currentRow()) |row| {
+                    if (document.cursor_x + 1 < row.chars.items.len) document.cursor_x += 1;
+                }
             }
         },
         .up => {
@@ -192,6 +202,7 @@ pub fn handleKey(
         },
         .visual => document.mode = .VISUAL,
         .command => {
+            editor_state.clearText(document);
             document.mode = .COMMAND;
             // only append the ":" to the command line here
             // the rest of the text is appended in .other
@@ -414,6 +425,7 @@ test "arrows work for movement in all modes" {
     var document: editor.Editor = .{};
     defer document.deinit(allocator);
     var editor_state: state.State = .{};
+    defer editor_state.deinit(allocator);
 
     try document.appendRow(allocator, "first");
     try document.appendRow(allocator, "second");
@@ -460,14 +472,11 @@ test "arrows work for movement in all modes" {
     try testing.expectEqual(@as(usize, 0), document.cursor_y);
 
     document.mode = .COMMAND;
+    try editor_state.insertText(allocator, editor_state.command_cursor_x, "wq");
     try testing.expect(!(try handleKey(.{ .codepoint = vaxis.Key.right }, &document, &editor_state, allocator)));
-    try testing.expectEqual(@as(usize, 1), document.cursor_x);
+    try testing.expectEqual(@as(usize, 1), editor_state.command_cursor_x);
     try testing.expect(!(try handleKey(.{ .codepoint = vaxis.Key.left }, &document, &editor_state, allocator)));
-    try testing.expectEqual(@as(usize, 0), document.cursor_x);
-    try testing.expect(!(try handleKey(.{ .codepoint = vaxis.Key.down }, &document, &editor_state, allocator)));
-    try testing.expectEqual(@as(usize, 1), document.cursor_y);
-    try testing.expect(!(try handleKey(.{ .codepoint = vaxis.Key.up }, &document, &editor_state, allocator)));
-    try testing.expectEqual(@as(usize, 0), document.cursor_y);
+    try testing.expectEqual(@as(usize, 0), editor_state.command_cursor_x);
 }
 
 test "modes change" {

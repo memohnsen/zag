@@ -10,3 +10,4 @@
 - [ ] windows
 - [ ] Add text highlighting
 - [ ] Add treesitter
+- [ ] integrated terminal
