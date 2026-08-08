@@ -6,12 +6,17 @@ The goal of Zag is to become an opinionated text editor with a fair amount of to
 
 Zag comes with most of the vim motions for manipulating and editing text.
 
+** Commands
+- type ":" to enter command mode from normal mode
+- :w to save a file
+- :q to quit Zag
+- :wq to save the file and quit Zag
+
 ** Available keybindings
 
 *** All modes
  - arrow keys to move through text
  - ESC to return to normal mode
- - Ctrl-q to quit
 
 *** Normal Mode
 **** Movement

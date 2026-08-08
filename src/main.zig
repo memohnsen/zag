@@ -53,12 +53,14 @@ fn run(init: std.process.Init) !void {
         const event = try event_loop.nextEvent();
         switch (event) {
             .key_press => |key| {
-                if (try commands.handleKey(key, &document, &editor_state, gpa)) break;
+                const should_quit = try commands.handleKey(key, &document, &editor_state, gpa);
 
                 if (editor_state.save_requested) {
                     editor_state.save_requested = false;
                     try document.saveFile(gpa, io, std.Io.Dir.cwd());
                 }
+
+                if (should_quit) break;
             },
             .winsize => |size| {
                 try vx.resize(gpa, tty.writer(), size);

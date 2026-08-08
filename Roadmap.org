@@ -1,7 +1,8 @@
 * Roadmap for Zag
 ** Coming Soon
-- [ ] Finsh wiring up command buffer
+- [X] Finsh wiring up command buffer
 - [ ] basic config file
+- [ ] base themes
 
 ** Far off
 - [ ] file tab line

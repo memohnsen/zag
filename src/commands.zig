@@ -6,9 +6,6 @@ const editor = @import("editor/editor.zig");
 const state = @import("editor/state.zig");
 
 const Command = enum {
-    quit,
-    save,
-
     // NAVIGATION
     left,
     right,
@@ -43,6 +40,7 @@ const Command = enum {
     // MODES
     normal,
     command,
+    run_command,
     visual,
     replace,
 
@@ -64,9 +62,6 @@ pub fn handleKey(
     const command = commandFromKey(key, document, pending_g);
 
     switch (command) {
-        .quit => return true,
-        .save => editor_state.save_requested = true,
-
         // NAVIGATION
         .left => {
             if (document.cursor_x > 0) document.cursor_x -= 1;
@@ -117,7 +112,7 @@ pub fn handleKey(
 
         // MODES
         .normal => {
-            editor_state.clearText();
+            editor_state.clearText(document);
             document.mode = .NORMAL;
         },
         .insert_left => {
@@ -204,7 +199,17 @@ pub fn handleKey(
             editor_state.command_cursor_x += 1;
         },
         .replace => document.mode = .REPLACE,
-
+        .run_command => {
+            if (std.mem.eql(u8, editor_state.command_buffer.items, ":w")) {
+                editor_state.save_requested = true;
+                editor_state.clearText(document);
+            } else if (std.mem.eql(u8, editor_state.command_buffer.items, ":q")) {
+                return true;
+            } else if (std.mem.eql(u8, editor_state.command_buffer.items, ":wq")) {
+                editor_state.save_requested = true;
+                return true;
+            }
+        },
         .other => {
             editor_state.pending_g = false;
             editor_state.pending_d = false;
@@ -226,13 +231,6 @@ pub fn handleKey(
 }
 
 fn commandFromKey(key: vaxis.Key, document: *editor.Editor, pending_g: bool) Command {
-    // ALL MODES
-    if (key.matches('q', .{ .ctrl = true })) return .quit;
-
-    // BUG: when running this program in zellij, pressing ctrl-s pauses the terminal
-    // this means in order to use the editor again you must press esc
-    // this means ctrl-s to save in zellij does not work
-    if (key.matches('s', .{ .ctrl = true })) return .save;
     if (key.matches(vaxis.Key.escape, .{}) and document.mode != .NORMAL) return .normal;
 
     // NAVIGATION
@@ -280,6 +278,7 @@ fn commandFromKey(key: vaxis.Key, document: *editor.Editor, pending_g: bool) Com
     if (key.matches('v', .{}) and document.mode == .NORMAL) return .visual;
     if (key.matches('V', .{}) and document.mode == .NORMAL) return .visual;
     if (key.matches(':', .{}) and document.mode == .NORMAL) return .command;
+    if (key.matches(vaxis.Key.enter, .{}) and document.mode == .COMMAND) return .run_command;
 
     // ARROWS
     return switch (key.codepoint) {
@@ -306,15 +305,6 @@ fn clampCursorX(document: *editor.Editor) void {
             document.cursor_x = row.chars.items.len;
         }
     }
-}
-
-test "ctrl-q quits" {
-    var document: editor.Editor = .{};
-    const allocator = testing.allocator;
-    var editor_state: state.State = .{};
-    const key: vaxis.Key = .{ .codepoint = 'q', .mods = .{ .ctrl = true } };
-
-    try testing.expect(try handleKey(key, &document, &editor_state, allocator));
 }
 
 test "cursor clamps at final char in row when changing lines" {
@@ -930,13 +920,14 @@ test "save changes editor_state" {
     var document: editor.Editor = .{};
     defer document.deinit(allocator);
     var editor_state: state.State = .{};
-
-    try testing.expect(!(try handleKey(.{ .codepoint = 's', .mods = .{ .ctrl = true } }, &document, &editor_state, allocator)));
-    try testing.expect(editor_state.save_requested == true);
+    defer editor_state.deinit(allocator);
 
     try document.appendRow(allocator, "first");
 
-    try testing.expect(!(try handleKey(.{ .codepoint = 's', .mods = .{ .ctrl = true } }, &document, &editor_state, allocator)));
+    try testing.expect(!(try handleKey(.{ .codepoint = ':' }, &document, &editor_state, allocator)));
+    try testing.expect(document.mode == .COMMAND);
+    try testing.expect(!(try handleKey(.{ .codepoint = 'w', .text = "w" }, &document, &editor_state, allocator)));
+    try testing.expect(!(try handleKey(.{ .codepoint = vaxis.Key.enter }, &document, &editor_state, allocator)));
     try testing.expect(editor_state.save_requested == true);
 }
 
@@ -948,6 +939,7 @@ test "saving file with text" {
     var document: editor.Editor = .{};
     defer document.deinit(allocator);
     var editor_state: state.State = .{};
+    defer editor_state.deinit(allocator);
 
     document.filename = try allocator.dupe(u8, "test.txt");
     try document.appendRow(allocator, "hello");
@@ -958,7 +950,10 @@ test "saving file with text" {
     const saved = try tmp.dir.readFileAlloc(io, "test.txt", allocator, .limited(1024));
     defer allocator.free(saved);
 
-    try testing.expect(!(try handleKey(.{ .codepoint = 's', .mods = .{ .ctrl = true } }, &document, &editor_state, allocator)));
+    try testing.expect(!(try handleKey(.{ .codepoint = ':' }, &document, &editor_state, allocator)));
+    try testing.expect(document.mode == .COMMAND);
+    try testing.expect(!(try handleKey(.{ .codepoint = 'w', .text = "w" }, &document, &editor_state, allocator)));
+    try testing.expect(!(try handleKey(.{ .codepoint = vaxis.Key.enter }, &document, &editor_state, allocator)));
     try testing.expectEqualStrings("hello\nworld", saved);
     try testing.expect(editor_state.save_requested == true);
 }
@@ -999,4 +994,45 @@ test "deleting text in command line" {
 
     try testing.expect(!(try handleKey(.{ .codepoint = vaxis.Key.escape }, &document, &editor_state, allocator)));
     try testing.expect(document.mode == .NORMAL);
+}
+
+test ":q quits" {
+    const allocator = testing.allocator;
+    var editor_state = state.State{};
+    var document: editor.Editor = .{};
+    defer document.deinit(allocator);
+    defer editor_state.deinit(allocator);
+
+    try testing.expect(!(try handleKey(.{ .codepoint = ':' }, &document, &editor_state, allocator)));
+    try testing.expect(document.mode == .COMMAND);
+    try testing.expect(!(try handleKey(.{ .codepoint = 'q', .text = "q" }, &document, &editor_state, allocator)));
+    try testing.expect((try handleKey(.{ .codepoint = vaxis.Key.enter }, &document, &editor_state, allocator)));
+}
+
+test ":wq saves and quits" {
+    const allocator = testing.allocator;
+    const io = testing.io;
+    var tmp = testing.tmpDir(.{});
+    defer tmp.cleanup();
+    var document: editor.Editor = .{};
+    defer document.deinit(allocator);
+    var editor_state: state.State = .{};
+    defer editor_state.deinit(allocator);
+
+    document.filename = try allocator.dupe(u8, "test.txt");
+    try document.appendRow(allocator, "hello");
+    try document.appendRow(allocator, "world");
+
+    try document.saveFile(allocator, io, tmp.dir);
+
+    const saved = try tmp.dir.readFileAlloc(io, "test.txt", allocator, .limited(1024));
+    defer allocator.free(saved);
+
+    try testing.expect(!(try handleKey(.{ .codepoint = ':' }, &document, &editor_state, allocator)));
+    try testing.expect(document.mode == .COMMAND);
+    try testing.expect(!(try handleKey(.{ .codepoint = 'w', .text = "w" }, &document, &editor_state, allocator)));
+    try testing.expect(!(try handleKey(.{ .codepoint = 'q', .text = "q" }, &document, &editor_state, allocator)));
+    try testing.expect((try handleKey(.{ .codepoint = vaxis.Key.enter }, &document, &editor_state, allocator)));
+    try testing.expectEqualStrings("hello\nworld", saved);
+    try testing.expect(editor_state.save_requested == true);
 }

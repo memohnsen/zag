@@ -1,6 +1,7 @@
 const std = @import("std");
 const testing = std.testing;
 const mem = std.mem;
+const editor = @import("editor.zig");
 
 pub const State = struct {
     command_buffer: std.ArrayList(u8) = .empty,
@@ -10,7 +11,6 @@ pub const State = struct {
     pending_g: bool = false,
     pending_d: bool = false,
 
-    // save request is sent to main where saving happens
     save_requested: bool = false,
 
     pub fn deinit(self: *State, allocator: std.mem.Allocator) void {
@@ -32,9 +32,10 @@ pub const State = struct {
         _ = self.command_buffer.orderedRemove(index);
     }
 
-    pub fn clearText(self: *State) void {
+    pub fn clearText(self: *State, document: *editor.Editor) void {
         self.command_buffer.clearRetainingCapacity();
         self.command_cursor_x = 0;
+        document.mode = .NORMAL;
     }
 };
 
