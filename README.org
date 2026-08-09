@@ -59,7 +59,7 @@ Zag comes with most of the vim motions for manipulating and editing text.
  - <J> joins the row below the cursor with the current row
 
 **** Modes
- - <r> / <R> to enter replace mode ( R does the same as r currently )
+ - <r> / <R> to enter replace mode
  - <v> / <V> to enter visual mode ( does nothing currently )
 
 ** Working with Zag

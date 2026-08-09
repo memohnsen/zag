@@ -11,6 +11,8 @@ pub const State = struct {
     pending_g: bool = false,
     pending_d: bool = false,
 
+    replace_mult: bool = false,
+
     save_requested: bool = false,
     notif_started: ?std.Io.Timestamp = null,
 

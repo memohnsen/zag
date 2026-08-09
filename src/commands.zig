@@ -43,6 +43,7 @@ const Command = enum {
     run_command,
     visual,
     replace,
+    replace_mult,
 
     // Text insertion
     other,
@@ -130,6 +131,7 @@ pub fn handleKey(
         // MODES
         .normal => {
             editor_state.clearText(document);
+            editor_state.replace_mult = false;
             document.mode = .NORMAL;
         },
         .insert_left => {
@@ -219,6 +221,10 @@ pub fn handleKey(
         .replace => {
             document.mode = .REPLACE;
         },
+        .replace_mult => {
+            document.mode = .REPLACE;
+            editor_state.replace_mult = true;
+        },
         .run_command => {
             if (std.mem.eql(u8, editor_state.command_buffer.items, ":w")) {
                 editor_state.save_requested = true;
@@ -244,8 +250,13 @@ pub fn handleKey(
                 }
             } else if (document.mode == .REPLACE) {
                 if (key.text) |text| {
-                    try document.replaceChar(allocator, text, document.cursor_x);
-                    document.mode = .NORMAL;
+                    if (editor_state.replace_mult) {
+                        try document.replaceChar(allocator, text, document.cursor_x);
+                        document.cursor_x += 1;
+                    } else {
+                        try document.replaceChar(allocator, text, document.cursor_x);
+                        document.mode = .NORMAL;
+                    }
                 }
             }
         },
@@ -298,7 +309,7 @@ fn commandFromKey(key: vaxis.Key, document: *editor.Editor, pending_g: bool) Com
 
     // MODES
     if (key.matches('r', .{}) and document.mode == .NORMAL) return .replace;
-    if (key.matches('R', .{}) and document.mode == .NORMAL) return .replace;
+    if (key.matches('R', .{}) and document.mode == .NORMAL) return .replace_mult;
     if (key.matches('v', .{}) and document.mode == .NORMAL) return .visual;
     if (key.matches('V', .{}) and document.mode == .NORMAL) return .visual;
     if (key.matches(':', .{}) and document.mode == .NORMAL) return .command;
