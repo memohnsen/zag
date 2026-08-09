@@ -1148,3 +1148,37 @@ test "replacing text with r" {
     try testing.expect(document.mode == .NORMAL);
     try testing.expectEqualStrings("", document.rows.items[1].chars.items);
 }
+
+test "replacing text with R" {
+    const allocator = testing.allocator;
+    var editor_state = state.State{};
+    var document: editor.Editor = .{};
+    defer document.deinit(allocator);
+    defer editor_state.deinit(allocator);
+
+    try document.appendRow(allocator, "hello");
+
+    document.cursor_y = 0;
+    document.cursor_x = 0;
+    try testing.expect(!(try handleKey(.{ .codepoint = 'R' }, &document, &editor_state, allocator)));
+    try testing.expect(document.mode == .REPLACE);
+    try testing.expect(!(try handleKey(.{ .codepoint = 'w', .text = "w" }, &document, &editor_state, allocator)));
+    try testing.expect(!(try handleKey(.{ .codepoint = 'o', .text = "o" }, &document, &editor_state, allocator)));
+    try testing.expect(!(try handleKey(.{ .codepoint = 'r', .text = "r" }, &document, &editor_state, allocator)));
+    try testing.expect(!(try handleKey(.{ .codepoint = 'l', .text = "l" }, &document, &editor_state, allocator)));
+    try testing.expect(!(try handleKey(.{ .codepoint = 'd', .text = "d" }, &document, &editor_state, allocator)));
+    // this should not show in the line since it's greater than the length of the row
+    try testing.expect(!(try handleKey(.{ .codepoint = '.', .text = "." }, &document, &editor_state, allocator)));
+    try testing.expect(!(try handleKey(.{ .codepoint = vaxis.Key.escape }, &document, &editor_state, allocator)));
+    try testing.expect(document.mode == .NORMAL);
+    try testing.expectEqualStrings("world", document.rows.items[0].chars.items);
+
+    try document.appendRow(allocator, "");
+    document.cursor_y = 1;
+    try testing.expect(!(try handleKey(.{ .codepoint = 'R' }, &document, &editor_state, allocator)));
+    try testing.expect(document.mode == .REPLACE);
+    try testing.expect(!(try handleKey(.{ .codepoint = 'w', .text = "w" }, &document, &editor_state, allocator)));
+    try testing.expect(!(try handleKey(.{ .codepoint = vaxis.Key.escape }, &document, &editor_state, allocator)));
+    try testing.expect(document.mode == .NORMAL);
+    try testing.expectEqualStrings("", document.rows.items[1].chars.items);
+}
