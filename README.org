@@ -10,6 +10,7 @@ Zag comes with most of the vim motions for manipulating and editing text.
 - type ":" to enter command mode from normal mode
 - :w to save a file
 - :q to quit Zag
+- :q! to force quit
 - :wq to save the file and quit Zag
 
 ** Available keybindings
@@ -25,7 +26,6 @@ Zag comes with most of the vim motions for manipulating and editing text.
  - <Enter> to move one row down
  - <$> or <gl> to move to last char in row
  - <0> to move to start of the row
- - <gh> / <_> to move to first char in row
  - <gg> to move to first row
  - <G> to move to last row
  - <M> to move to middle line of screen
@@ -33,6 +33,7 @@ Zag comes with most of the vim motions for manipulating and editing text.
  - <Ctrl-u> to go up half the screen
 
 ***** Upcoming
+- <gh> / <_> to move to first char in row
 - <b> move back one word to the first char
 - <B> move back until next space to the first char
 - <w> move forward one word to the first char

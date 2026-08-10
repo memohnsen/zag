@@ -10,9 +10,10 @@ pub fn handleNotifications(
     allocator: mem.Allocator,
     io: std.Io,
 ) !void {
+    var notif_buf: [512]u8 = undefined;
+
     if (editor_state.save_requested) {
         try document.saveFile(allocator, io, std.Io.Dir.cwd());
-        var notif_buf: [512]u8 = undefined;
 
         if (document.filename) |file| {
             const text = try std.fmt.bufPrint(&notif_buf, "{s} has been successfully saved.", .{file});
@@ -23,6 +24,12 @@ pub fn handleNotifications(
         }
 
         editor_state.save_requested = false;
+    }
+
+    if (editor_state.quit_blocked) {
+        const text = try std.fmt.bufPrint(&notif_buf, "Please save your file before quitting or type :q! to force quit", .{});
+        try editor_state.showNotification(document, allocator, text, io);
+        editor_state.quit_blocked = false;
     }
 }
 
@@ -57,5 +64,19 @@ test "failed save message" {
     editor_state.save_requested = true;
     try handleNotifications(&editor_state, &document, allocator, io);
     try testing.expectEqualStrings("Saving failed, no file name found.", editor_state.command_buffer.items);
+    try testing.expect(editor_state.save_requested == false);
+}
+
+test "show quit blocked" {
+    const allocator = testing.allocator;
+    const io = testing.io;
+    var document = editor.Editor{};
+    defer document.deinit(allocator);
+    var editor_state = state.State{};
+    defer editor_state.deinit(allocator);
+
+    editor_state.quit_blocked = true;
+    try handleNotifications(&editor_state, &document, allocator, io);
+    try testing.expectEqualStrings("Please save your file before quitting or type :q! to force quit", editor_state.command_buffer.items);
     try testing.expect(editor_state.save_requested == false);
 }

@@ -13,11 +13,18 @@ const Command = enum {
     down,
     doc_start_gg,
     document_end,
+    first_char,
     line_start,
     line_end,
     middle,
     page_down,
     page_up,
+    next_word_start,
+    next_word_end,
+    last_word_start,
+    next_space_start,
+    next_space_end,
+    last_space_start,
 
     // INSERTION
     insert_left,
@@ -100,6 +107,12 @@ pub fn handleKey(
         .document_end => {
             if (document.rows.items.len > 0) document.cursor_y = document.rows.items.len - 1;
         },
+        // TODO:
+        .first_char => {
+            document.cursor_x = 0;
+            editor_state.pending_g = false;
+        },
+        // ---
         .line_start => {
             document.cursor_x = 0;
             editor_state.pending_g = false;
@@ -127,6 +140,14 @@ pub fn handleKey(
         .page_up => {
             document.cursor_y = document.cursor_y -| document.rows_shown / 2;
         },
+        // TODO:
+        .next_word_start => {},
+        .next_word_end => {},
+        .last_word_start => {},
+        .next_space_start => {},
+        .next_space_end => {},
+        .last_space_start => {},
+        // ---
 
         // MODES
         .normal => {
@@ -229,8 +250,12 @@ pub fn handleKey(
             if (std.mem.eql(u8, editor_state.command_buffer.items, ":w")) {
                 editor_state.save_requested = true;
                 editor_state.clearText(document);
-            } else if (std.mem.eql(u8, editor_state.command_buffer.items, ":q")) {
+            } else if (std.mem.eql(u8, editor_state.command_buffer.items, ":q") and !document.unsaved_edits) {
                 return true;
+            } else if (std.mem.eql(u8, editor_state.command_buffer.items, ":q!")) {
+                return true;
+            } else if (std.mem.eql(u8, editor_state.command_buffer.items, ":q") and document.unsaved_edits) {
+                editor_state.quit_blocked = true;
             } else if (std.mem.eql(u8, editor_state.command_buffer.items, ":wq")) {
                 editor_state.save_requested = true;
                 return true;
@@ -272,13 +297,24 @@ fn commandFromKey(key: vaxis.Key, document: *editor.Editor, pending_g: bool) Com
     // NAVIGATION
     if (key.matches('G', .{}) and document.mode == .NORMAL) return .document_end;
     if (key.matches('0', .{}) and document.mode == .NORMAL) return .line_start;
-    if (key.matches('h', .{}) and document.mode == .NORMAL and pending_g) return .line_start;
+    // TODO: fix to go to first char
+    if (key.matches('h', .{}) and document.mode == .NORMAL and pending_g) return .first_char;
+    if (key.matches('_', .{}) and document.mode == .NORMAL and pending_g) return .first_char;
+    // -----------------------------
     if (key.matches('$', .{}) and document.mode == .NORMAL) return .line_end;
     if (key.matches('l', .{}) and document.mode == .NORMAL and pending_g) return .line_end;
     if (key.matches('g', .{}) and document.mode == .NORMAL) return .doc_start_gg;
     if (key.matches('M', .{}) and document.mode == .NORMAL) return .middle;
     if (key.matches('d', .{ .ctrl = true }) and document.mode == .NORMAL) return .page_down;
     if (key.matches('u', .{ .ctrl = true }) and document.mode == .NORMAL) return .page_up;
+    // TODO: ----------------
+    if (key.matches('w', .{}) and document.mode == .NORMAL) return .next_word_start;
+    if (key.matches('W', .{}) and document.mode == .NORMAL) return .next_space_start;
+    if (key.matches('e', .{}) and document.mode == .NORMAL) return .next_word_end;
+    if (key.matches('E', .{}) and document.mode == .NORMAL) return .next_space_end;
+    if (key.matches('b', .{}) and document.mode == .NORMAL) return .last_word_start;
+    if (key.matches('B', .{}) and document.mode == .NORMAL) return .last_space_start;
+    // ----------------------
     if (key.matches(vaxis.Key.backspace, .{}) and document.mode == .NORMAL) return .left;
     if (key.matches(vaxis.Key.enter, .{}) and document.mode == .NORMAL) return .down;
 
@@ -1082,17 +1118,65 @@ test "deleting text in command line" {
     try testing.expect(document.mode == .NORMAL);
 }
 
-test ":q quits" {
+test ":q quits with no unsaved edits" {
     const allocator = testing.allocator;
     var editor_state = state.State{};
     var document: editor.Editor = .{};
     defer document.deinit(allocator);
     defer editor_state.deinit(allocator);
 
+    try testing.expect(!editor_state.quit_blocked);
     try testing.expect(!(try handleKey(.{ .codepoint = ':' }, &document, &editor_state, allocator)));
     try testing.expect(document.mode == .COMMAND);
     try testing.expect(!(try handleKey(.{ .codepoint = 'q', .text = "q" }, &document, &editor_state, allocator)));
     try testing.expect((try handleKey(.{ .codepoint = vaxis.Key.enter }, &document, &editor_state, allocator)));
+}
+
+test ":q fails with unsaved edits" {
+    const allocator = testing.allocator;
+    var document: editor.Editor = .{};
+    defer document.deinit(allocator);
+    var editor_state: state.State = .{};
+    defer editor_state.deinit(allocator);
+
+    document.unsaved_edits = true;
+    try testing.expect(!(try handleKey(.{ .codepoint = ':' }, &document, &editor_state, allocator)));
+    try testing.expect(document.mode == .COMMAND);
+    try testing.expect(!(try handleKey(.{ .codepoint = 'q', .text = "q" }, &document, &editor_state, allocator)));
+    try testing.expect(!(try handleKey(.{ .codepoint = vaxis.Key.enter }, &document, &editor_state, allocator)));
+    try testing.expect(editor_state.quit_blocked);
+}
+
+test ":q! quits with no unsaved edits" {
+    const allocator = testing.allocator;
+    var editor_state = state.State{};
+    var document: editor.Editor = .{};
+    defer document.deinit(allocator);
+    defer editor_state.deinit(allocator);
+
+    try testing.expect(!editor_state.quit_blocked);
+    try testing.expect(!(try handleKey(.{ .codepoint = ':' }, &document, &editor_state, allocator)));
+    try testing.expect(document.mode == .COMMAND);
+    try testing.expect(!(try handleKey(.{ .codepoint = 'q', .text = "q" }, &document, &editor_state, allocator)));
+    try testing.expect(!(try handleKey(.{ .codepoint = '!', .text = "!" }, &document, &editor_state, allocator)));
+    try testing.expect((try handleKey(.{ .codepoint = vaxis.Key.enter }, &document, &editor_state, allocator)));
+    try testing.expect(!editor_state.quit_blocked);
+}
+
+test ":q! quits with unsaved edits" {
+    const allocator = testing.allocator;
+    var document: editor.Editor = .{};
+    defer document.deinit(allocator);
+    var editor_state: state.State = .{};
+    defer editor_state.deinit(allocator);
+
+    document.unsaved_edits = true;
+    try testing.expect(!(try handleKey(.{ .codepoint = ':' }, &document, &editor_state, allocator)));
+    try testing.expect(document.mode == .COMMAND);
+    try testing.expect(!(try handleKey(.{ .codepoint = 'q', .text = "q" }, &document, &editor_state, allocator)));
+    try testing.expect(!(try handleKey(.{ .codepoint = '!', .text = "!" }, &document, &editor_state, allocator)));
+    try testing.expect((try handleKey(.{ .codepoint = vaxis.Key.enter }, &document, &editor_state, allocator)));
+    try testing.expect(!editor_state.quit_blocked);
 }
 
 test ":wq saves and quits" {

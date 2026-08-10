@@ -24,6 +24,9 @@ pub const Editor = struct {
     col_offset: usize = 0,
     filename: ?[]u8 = null,
     mode: Mode = .NORMAL,
+    // NOTE: this is a poor way to do it, change it once we add an undo history later
+    // ideally we compare against a snapshot of the file
+    unsaved_edits: bool = false,
 
     pub fn deinit(self: *Editor, allocator: mem.Allocator) void {
         for (self.rows.items) |*row| {
@@ -51,6 +54,7 @@ pub const Editor = struct {
             var row = self.rows.orderedRemove(index);
             row.deinit(allocator);
         }
+        self.unsaved_edits = true;
     }
 
     pub fn joinWithPrevRow(self: *Editor, allocator: mem.Allocator) !void {
@@ -95,6 +99,7 @@ pub const Editor = struct {
 
         const og_row = &self.rows.items[y];
         og_row.chars.shrinkRetainingCapacity(x);
+        self.unsaved_edits = true;
     }
 
     pub fn insertRow(
@@ -109,6 +114,7 @@ pub const Editor = struct {
 
         const row = Row{ .chars = row_list };
         try self.rows.insert(allocator, index, row);
+        self.unsaved_edits = true;
     }
 
     pub fn insertNewLine(
@@ -132,12 +138,17 @@ pub const Editor = struct {
     }
 
     pub fn insertText(self: *Editor, allocator: mem.Allocator, input: []const u8) !void {
+        if (input.len == 0) {
+            return;
+        }
+
         if (self.rows.items.len == 0) {
             try self.appendRow(allocator, "");
         }
 
         const row = self.currentRow().?;
         try row.insertText(allocator, self.cursor_x, input);
+        self.unsaved_edits = true;
         self.cursor_x += input.len;
     }
 
@@ -154,6 +165,7 @@ pub const Editor = struct {
 
         self.rows.items[self.cursor_y].removeByte(index);
         try self.rows.items[self.cursor_y].insertText(allocator, index, input);
+        self.unsaved_edits = true;
     }
 
     pub fn currentRow(self: *Editor) ?*Row {
@@ -205,6 +217,7 @@ pub const Editor = struct {
             defer allocator.free(text);
 
             try dir.writeFile(io, .{ .sub_path = filename, .data = text });
+            self.unsaved_edits = false;
         }
     }
 };
@@ -519,4 +532,52 @@ test "replacing char does nothing on empty file" {
 
     try document.replaceChar(allocator, "e", document.cursor_x);
     try testing.expectEqual(0, document.rows.items.len);
+}
+
+test "changing text shows unsaved_edits true" {
+    const allocator = testing.allocator;
+    const io = testing.io;
+    var tmp = testing.tmpDir(.{});
+    defer tmp.cleanup();
+    var document = Editor{};
+    defer document.deinit(allocator);
+
+    document.filename = try allocator.dupe(u8, "test.txt");
+    try document.appendRow(allocator, "hello");
+    try document.appendRow(allocator, "world");
+
+    try document.saveFile(allocator, io, tmp.dir);
+    try testing.expect(!document.unsaved_edits);
+    try document.replaceChar(allocator, "e", document.cursor_x);
+    try testing.expect(document.unsaved_edits);
+
+    try document.saveFile(allocator, io, tmp.dir);
+    try testing.expect(!document.unsaved_edits);
+    try document.insertNewLine(allocator);
+    try testing.expect(document.unsaved_edits);
+
+    try document.saveFile(allocator, io, tmp.dir);
+    try testing.expect(!document.unsaved_edits);
+    try document.insertRow(allocator, "e", 0);
+    try testing.expect(document.unsaved_edits);
+
+    try document.saveFile(allocator, io, tmp.dir);
+    try testing.expect(!document.unsaved_edits);
+    try document.insertText(allocator, "e");
+    try testing.expect(document.unsaved_edits);
+
+    try document.saveFile(allocator, io, tmp.dir);
+    try testing.expect(!document.unsaved_edits);
+    try document.removeRow(allocator, 1);
+    try testing.expect(document.unsaved_edits);
+
+    try document.saveFile(allocator, io, tmp.dir);
+    try testing.expect(!document.unsaved_edits);
+    try document.joinWithNextRow(allocator);
+    try testing.expect(document.unsaved_edits);
+
+    try document.saveFile(allocator, io, tmp.dir);
+    try testing.expect(!document.unsaved_edits);
+    try document.joinWithPrevRow(allocator);
+    try testing.expect(document.unsaved_edits);
 }

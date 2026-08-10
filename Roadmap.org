@@ -3,6 +3,7 @@
 - [X] Finsh wiring up command buffer
 - [ ] basic config file
 - [ ] base themes
+- [ ] line nums and relative line nums
 
 ** Far off
 - [ ] file tab line

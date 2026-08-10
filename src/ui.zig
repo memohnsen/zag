@@ -1,4 +1,5 @@
 const std = @import("std");
+const testing = std.testing;
 const vaxis = @import("vaxis");
 const editor = @import("editor/editor.zig");
 const state = @import("editor/state.zig");
@@ -36,6 +37,7 @@ pub fn refresh(
     try vx.render(tty);
 }
 
+// TODO: add a ui testing library like cargo insta
 fn drawRows(window: vaxis.Window, document: *const editor.Editor) void {
     const text_height = window.height -| 2;
     for (0..text_height) |screen_row| {
@@ -71,7 +73,8 @@ fn drawStatusBar(
 
     // Show filename and lines in file
     const file: []const u8 = if (document.filename) |name| name else "[No File]";
-    const file_text = try std.fmt.bufPrint(file_buf, " {s} | {s} - {d} lines", .{ @tagName(document.mode), file, document.rows.items.len });
+    const edits_icon = unsavedEditsIcon(document);
+    const file_text = try std.fmt.bufPrint(file_buf, " {s} | {s}{s} - {d} lines", .{ @tagName(document.mode), file, edits_icon, document.rows.items.len });
     _ = status_window.printSegment(.{ .text = file_text, .style = .{ .reverse = true } }, .{ .wrap = .none });
 
     // Show cursor position
@@ -79,6 +82,13 @@ fn drawStatusBar(
     const text_width: u16 = @intCast(cursor_text.len);
     const text_col = status_window.width -| text_width;
     _ = status_window.printSegment(.{ .text = cursor_text, .style = .{ .reverse = true } }, .{ .wrap = .none, .col_offset = text_col });
+}
+
+fn unsavedEditsIcon(document: *const editor.Editor) []const u8 {
+    return switch (document.unsaved_edits) {
+        true => " [+]",
+        else => "",
+    };
 }
 
 fn drawCommandBar(
@@ -118,4 +128,16 @@ fn printAt(
             .wrap = .none,
         },
     );
+}
+
+test "unsaved edits icon" {
+    var document = editor.Editor{};
+    const allocator = testing.allocator;
+    defer document.deinit(allocator);
+
+    document.unsaved_edits = true;
+    try testing.expectEqualStrings(" [+]", unsavedEditsIcon(&document));
+
+    document.unsaved_edits = false;
+    try testing.expectEqualStrings("", unsavedEditsIcon(&document));
 }
