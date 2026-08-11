@@ -42,11 +42,8 @@ pub const Editor = struct {
     }
 
     pub fn appendRow(self: *Editor, allocator: mem.Allocator, input: []const u8) !void {
-        var row_list: std.ArrayList(u8) = .empty;
-        errdefer row_list.deinit(allocator);
-        try row_list.appendSlice(allocator, input);
-
-        const row = Row{ .chars = row_list };
+        var row = try Row.init(allocator, input);
+        errdefer row.deinit(allocator);
         try self.rows.append(allocator, row);
     }
 
@@ -88,9 +85,7 @@ pub const Editor = struct {
         }
     }
 
-    pub fn deleteRemainingLine(
-        self: *Editor,
-    ) void {
+    pub fn deleteRemainingLine(self: *Editor, allocator: mem.Allocator) !void {
         const y = self.cursor_y;
         const x = self.cursor_x;
 
@@ -100,6 +95,7 @@ pub const Editor = struct {
 
         const og_row = &self.rows.items[y];
         og_row.chars.shrinkRetainingCapacity(x);
+        try og_row.updateRender(allocator);
         self.unsaved_edits = true;
     }
 
@@ -109,11 +105,8 @@ pub const Editor = struct {
         input: []const u8,
         index: usize,
     ) !void {
-        var row_list: std.ArrayList(u8) = .empty;
-        errdefer row_list.deinit(allocator);
-        try row_list.appendSlice(allocator, input);
-
-        const row = Row{ .chars = row_list };
+        var row = try Row.init(allocator, input);
+        errdefer row.deinit(allocator);
         try self.rows.insert(allocator, index, row);
         self.unsaved_edits = true;
     }
@@ -134,6 +127,7 @@ pub const Editor = struct {
 
         const og_row = &self.rows.items[y];
         og_row.chars.shrinkRetainingCapacity(x);
+        try og_row.updateRender(allocator);
         self.cursor_y = y + 1;
         self.cursor_x = 0;
     }
@@ -164,7 +158,7 @@ pub const Editor = struct {
             return;
         }
 
-        self.rows.items[self.cursor_y].removeByte(index);
+        try self.rows.items[self.cursor_y].removeByte(index, allocator);
         try self.rows.items[self.cursor_y].insertText(allocator, index, input);
         self.unsaved_edits = true;
     }
@@ -292,12 +286,14 @@ test "inserting new line" {
     var document = Editor{};
     defer document.deinit(allocator);
 
-    try document.appendRow(allocator, "hello world");
+    try document.appendRow(allocator, "hello\tworld");
     document.cursor_x = 5;
 
     try document.insertNewLine(allocator);
     try testing.expectEqualStrings("hello", document.rows.items[0].chars.items);
-    try testing.expectEqualStrings(" world", document.rows.items[1].chars.items);
+    try testing.expectEqualStrings("\tworld", document.rows.items[1].chars.items);
+    try testing.expectEqualStrings("hello", document.rows.items[0].render.items);
+    try testing.expectEqualStrings("    world", document.rows.items[1].render.items);
     try testing.expect(document.cursor_y == 1);
     try testing.expect(document.cursor_x == 0);
 }
@@ -362,8 +358,9 @@ test "removing remainder of line" {
     try document.appendRow(allocator, "hello");
     document.cursor_x = 1;
 
-    document.deleteRemainingLine();
+    try document.deleteRemainingLine(allocator);
     try testing.expectEqualStrings("h", document.rows.items[0].chars.items);
+    try testing.expectEqualStrings("h", document.rows.items[0].render.items);
 }
 
 test "join row with prev row" {

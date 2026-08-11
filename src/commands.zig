@@ -197,7 +197,7 @@ pub fn handleKey(
                 }
             } else if (document.cursor_x != 0) {
                 if (document.currentRow()) |row| {
-                    row.removeByte(document.cursor_x - 1);
+                    try row.removeByte(document.cursor_x - 1, allocator);
                     document.cursor_x -= 1;
                 }
             } else {
@@ -209,7 +209,7 @@ pub fn handleKey(
         .delete_current => {
             if (document.currentRow()) |row| {
                 if (document.cursor_x < row.chars.items.len) {
-                    row.removeByte(document.cursor_x);
+                    try row.removeByte(document.cursor_x, allocator);
                 }
             }
         },
@@ -227,7 +227,7 @@ pub fn handleKey(
             }
         },
         .delete_line_remaining => {
-            document.deleteRemainingLine();
+            try document.deleteRemainingLine(allocator);
         },
         .visual => document.mode = .VISUAL,
         .command => {
