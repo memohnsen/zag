@@ -2,6 +2,7 @@ const std = @import("std");
 const mem = std.mem;
 const testing = std.testing;
 const Row = @import("row.zig").Row;
+const state = @import("state.zig");
 
 pub const Mode = enum {
     NORMAL,
@@ -219,6 +220,18 @@ pub const Editor = struct {
             try dir.writeFile(io, .{ .sub_path = filename, .data = text });
             self.unsaved_edits = false;
         }
+    }
+
+    pub fn setFilenameAs(
+        self: *Editor,
+        allocator: mem.Allocator,
+        filename: []const u8,
+    ) !void {
+        const name = try allocator.dupe(u8, filename);
+        if (self.filename) |file| {
+            allocator.free(file);
+        }
+        self.filename = name;
     }
 };
 
@@ -498,6 +511,30 @@ test "saving file overwrites old data" {
     try document.saveFile(allocator, io, tmp.dir);
 
     const saved = try tmp.dir.readFileAlloc(io, "test.txt", allocator, .limited(1024));
+    defer allocator.free(saved);
+
+    try testing.expectEqualStrings("new contents", saved);
+}
+
+test "save file with new file name" {
+    const allocator = testing.allocator;
+    const io = testing.io;
+    var document = Editor{};
+    defer document.deinit(allocator);
+
+    try document.setFilenameAs(allocator, "new.txt");
+
+    var tmp = testing.tmpDir(.{});
+    defer tmp.cleanup();
+    const file = try tmp.dir.createFile(io, document.filename.?, .{});
+    defer file.close(io);
+    try file.writeStreamingAll(io, "hello\nworld");
+
+    try document.appendRow(allocator, "new contents");
+
+    try document.saveFile(allocator, io, tmp.dir);
+
+    const saved = try tmp.dir.readFileAlloc(io, document.filename.?, allocator, .limited(1024));
     defer allocator.free(saved);
 
     try testing.expectEqualStrings("new contents", saved);

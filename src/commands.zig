@@ -1,4 +1,5 @@
 const std = @import("std");
+const mem = std.mem;
 const testing = std.testing;
 
 const vaxis = @import("vaxis");
@@ -60,7 +61,7 @@ pub fn handleKey(
     key: vaxis.Key,
     document: *editor.Editor,
     editor_state: *state.State,
-    allocator: std.mem.Allocator,
+    allocator: mem.Allocator,
 ) !bool {
     // load pending editor_state into a const so we don't have to false it every branch
     const pending_g = editor_state.pending_g;
@@ -129,8 +130,6 @@ pub fn handleKey(
             document.cursor_y = document.row_offset + document.rows_shown / 2;
         },
         .page_down => {
-            // y = 9, rows = 10, shown = 10
-            // y + rows_shown / 2 > rows.len
             if (document.cursor_y + document.rows_shown / 2 > document.rows.items.len) {
                 document.cursor_y = document.rows.items.len - 1;
             } else {
@@ -250,15 +249,28 @@ pub fn handleKey(
             if (std.mem.eql(u8, editor_state.command_buffer.items, ":w")) {
                 editor_state.save_requested = true;
                 editor_state.clearText(document);
+            } else if (std.mem.eql(u8, editor_state.command_buffer.items, ":wq")) {
+                editor_state.save_requested = true;
+                return true;
+            } else if (std.mem.startsWith(u8, editor_state.command_buffer.items, ":w ")) {
+                if (editor_state.command_buffer.items.len > 3) {
+                    const args = editor_state.command_buffer.items[3..];
+                    const filename = std.mem.trim(u8, args, " ");
+                    if (filename.len > 0) {
+                        try document.setFilenameAs(allocator, filename);
+                    }
+                }
+
+                editor_state.save_requested = true;
+                editor_state.clearText(document);
             } else if (std.mem.eql(u8, editor_state.command_buffer.items, ":q") and !document.unsaved_edits) {
                 return true;
             } else if (std.mem.eql(u8, editor_state.command_buffer.items, ":q!")) {
                 return true;
             } else if (std.mem.eql(u8, editor_state.command_buffer.items, ":q") and document.unsaved_edits) {
                 editor_state.quit_blocked = true;
-            } else if (std.mem.eql(u8, editor_state.command_buffer.items, ":wq")) {
-                editor_state.save_requested = true;
-                return true;
+            } else {
+                editor_state.invalid_command = true;
             }
         },
         .other => {
@@ -1177,6 +1189,55 @@ test ":q! quits with unsaved edits" {
     try testing.expect(!(try handleKey(.{ .codepoint = '!', .text = "!" }, &document, &editor_state, allocator)));
     try testing.expect((try handleKey(.{ .codepoint = vaxis.Key.enter }, &document, &editor_state, allocator)));
     try testing.expect(!editor_state.quit_blocked);
+}
+
+test ":w saves" {
+    const allocator = testing.allocator;
+    const io = testing.io;
+    var tmp = testing.tmpDir(.{});
+    defer tmp.cleanup();
+    var document: editor.Editor = .{};
+    defer document.deinit(allocator);
+    var editor_state: state.State = .{};
+    defer editor_state.deinit(allocator);
+
+    document.filename = try allocator.dupe(u8, "test.txt");
+    try document.appendRow(allocator, "hello");
+    try document.appendRow(allocator, "world");
+
+    try document.saveFile(allocator, io, tmp.dir);
+
+    const saved = try tmp.dir.readFileAlloc(io, "test.txt", allocator, .limited(1024));
+    defer allocator.free(saved);
+
+    try testing.expect(!(try handleKey(.{ .codepoint = ':' }, &document, &editor_state, allocator)));
+    try testing.expect(document.mode == .COMMAND);
+    try testing.expect(!(try handleKey(.{ .codepoint = 'w', .text = "w" }, &document, &editor_state, allocator)));
+    try testing.expect(!(try handleKey(.{ .codepoint = vaxis.Key.enter }, &document, &editor_state, allocator)));
+    try testing.expectEqualStrings("hello\nworld", saved);
+    try testing.expect(editor_state.save_requested == true);
+}
+
+test ":w {filename} saves with a filename" {
+    const allocator = testing.allocator;
+    var tmp = testing.tmpDir(.{});
+    defer tmp.cleanup();
+    var document: editor.Editor = .{};
+    defer document.deinit(allocator);
+    var editor_state: state.State = .{};
+    defer editor_state.deinit(allocator);
+
+    try document.appendRow(allocator, "hello");
+    try document.appendRow(allocator, "world");
+
+    try testing.expect(!(try handleKey(.{ .codepoint = ':' }, &document, &editor_state, allocator)));
+    try testing.expect(document.mode == .COMMAND);
+    try testing.expect(!(try handleKey(.{ .codepoint = 'w', .text = "w" }, &document, &editor_state, allocator)));
+    try testing.expect(!(try handleKey(.{ .codepoint = ' ', .text = " " }, &document, &editor_state, allocator)));
+    try testing.expect(!(try handleKey(.{ .codepoint = 'a', .text = "a" }, &document, &editor_state, allocator)));
+    try testing.expect(!(try handleKey(.{ .codepoint = vaxis.Key.enter }, &document, &editor_state, allocator)));
+    try testing.expectEqualStrings("hello", document.rows.items[0].chars.items);
+    try testing.expect(editor_state.save_requested == true);
 }
 
 test ":wq saves and quits" {

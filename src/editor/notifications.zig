@@ -31,6 +31,12 @@ pub fn handleNotifications(
         try editor_state.showNotification(document, allocator, text, io);
         editor_state.quit_blocked = false;
     }
+
+    if (editor_state.invalid_command) {
+        const text = try std.fmt.bufPrint(&notif_buf, "Invalid command. Valid commands include: :w, :q, :q!, :wq and, :w [filename]", .{});
+        try editor_state.showNotification(document, allocator, text, io);
+        editor_state.invalid_command = false;
+    }
 }
 
 test "succesful save message" {
