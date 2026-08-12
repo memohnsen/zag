@@ -235,6 +235,22 @@ pub const Editor = struct {
         }
         self.filename = name;
     }
+
+    pub fn search(self: *Editor, query: []const u8) bool {
+        if (query.len == 0) {
+            return false;
+        }
+
+        for (self.rows.items, 0..) |row, row_index| {
+            if (mem.indexOf(u8, row.chars.items, query)) |col_index| {
+                self.cursor_y = row_index;
+                self.cursor_x = col_index;
+                return true;
+            }
+        }
+
+        return false;
+    }
 };
 
 test "appending rows" {
@@ -633,4 +649,40 @@ test "scrolling changes render x" {
     document.cursor_x = 2;
     document.scroll(20, 20);
     try testing.expectEqual(4, document.render_x);
+}
+
+test "searching finds the string" {
+    const allocator = testing.allocator;
+    var document = Editor{};
+    defer document.deinit(allocator);
+    var editor_state = state.State{};
+    defer editor_state.deinit(allocator);
+
+    try document.appendRow(allocator, "hello there world");
+    try document.appendRow(allocator, "this is a new line");
+    try testing.expect(document.search("there"));
+    try testing.expectEqual(6, document.cursor_x);
+    try testing.expectEqual(0, document.cursor_y);
+
+    try testing.expect(document.search("new"));
+    try testing.expectEqual(10, document.cursor_x);
+    try testing.expectEqual(1, document.cursor_y);
+
+    try testing.expect(!document.search("none"));
+    try testing.expectEqual(10, document.cursor_x);
+    try testing.expectEqual(1, document.cursor_y);
+}
+
+test "searching goes to first instance" {
+    const allocator = testing.allocator;
+    var document = Editor{};
+    defer document.deinit(allocator);
+    var editor_state = state.State{};
+    defer editor_state.deinit(allocator);
+
+    try document.appendRow(allocator, "hello there world");
+    try document.appendRow(allocator, "hello there world");
+    try testing.expect(document.search("there"));
+    try testing.expectEqual(6, document.cursor_x);
+    try testing.expectEqual(0, document.cursor_y);
 }

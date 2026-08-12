@@ -17,6 +17,7 @@ pub const State = struct {
     notif_started: ?std.Io.Timestamp = null,
     quit_blocked: bool = false,
     invalid_command: bool = false,
+    invalid_search: bool = false,
 
     pub fn deinit(self: *State, allocator: std.mem.Allocator) void {
         self.command_buffer.deinit(allocator);

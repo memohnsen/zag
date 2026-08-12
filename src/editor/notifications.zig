@@ -37,6 +37,12 @@ pub fn handleNotifications(
         try editor_state.showNotification(document, allocator, text, io);
         editor_state.invalid_command = false;
     }
+
+    if (editor_state.invalid_search) {
+        const text = try std.fmt.bufPrint(&notif_buf, "No search results found.", .{});
+        try editor_state.showNotification(document, allocator, text, io);
+        editor_state.invalid_search = false;
+    }
 }
 
 test "succesful save message" {
