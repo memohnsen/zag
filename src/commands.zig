@@ -108,9 +108,12 @@ pub fn handleKey(
         .document_end => {
             if (document.rows.items.len > 0) document.cursor_y = document.rows.items.len - 1;
         },
-        // TODO:
         .first_char => {
-            document.cursor_x = 0;
+            if (std.mem.indexOfNone(u8, document.rows.items[document.cursor_y].render.items, " \t\r\n")) |pos| {
+                document.cursor_x = pos;
+            } else {
+                document.cursor_x = 0;
+            }
             editor_state.pending_g = false;
         },
         // ---
@@ -309,9 +312,8 @@ fn commandFromKey(key: vaxis.Key, document: *editor.Editor, pending_g: bool) Com
     // NAVIGATION
     if (key.matches('G', .{}) and document.mode == .NORMAL) return .document_end;
     if (key.matches('0', .{}) and document.mode == .NORMAL) return .line_start;
-    // TODO: fix to go to first char
     if (key.matches('h', .{}) and document.mode == .NORMAL and pending_g) return .first_char;
-    if (key.matches('_', .{}) and document.mode == .NORMAL and pending_g) return .first_char;
+    if (key.matches('_', .{}) and document.mode == .NORMAL) return .first_char;
     // -----------------------------
     if (key.matches('$', .{}) and document.mode == .NORMAL) return .line_end;
     if (key.matches('l', .{}) and document.mode == .NORMAL and pending_g) return .line_end;
