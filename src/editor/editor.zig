@@ -277,20 +277,6 @@ test "inserting rows" {
     try testing.expect(document.cursor_x == 1);
 }
 
-test "get current row" {
-    const allocator = testing.allocator;
-    var document = Editor{};
-    defer document.deinit(allocator);
-
-    try document.appendRow(allocator, "zero");
-    try document.appendRow(allocator, "one");
-    try document.appendRow(allocator, "two");
-    document.cursor_y = 2;
-
-    const row = document.currentRow() orelse return error.TestExpectedEqual;
-    try testing.expectEqualStrings("two", row.chars.items);
-}
-
 test "inserting new row" {
     const allocator = testing.allocator;
     var document = Editor{};
@@ -333,6 +319,7 @@ test "inserting new line on empty file" {
     try testing.expect(document.cursor_x == 0);
 }
 
+// DELETING TEXT
 test "removing line" {
     const allocator = testing.allocator;
     var document = Editor{};
@@ -387,6 +374,7 @@ test "removing remainder of line" {
     try testing.expectEqualStrings("h", document.rows.items[0].render.items);
 }
 
+// JOINING TEXT
 test "join row with prev row" {
     const allocator = testing.allocator;
     var document = Editor{};
@@ -446,54 +434,7 @@ test "join row with next empty row" {
     try testing.expectEqualStrings(" world", document.rows.items[1].chars.items);
 }
 
-test "transfering row to owned text" {
-    const allocator = testing.allocator;
-    var document = Editor{};
-    defer document.deinit(allocator);
-
-    try document.appendRow(allocator, "hello");
-    try document.appendRow(allocator, "world");
-
-    const owned = try document.toOwnedText(allocator);
-    defer allocator.free(owned);
-    try testing.expectEqualStrings("hello\nworld", owned);
-}
-
-test "transfering row to owned text with empty line" {
-    const allocator = testing.allocator;
-    var document = Editor{};
-    defer document.deinit(allocator);
-
-    try document.appendRow(allocator, "hello");
-    try document.appendRow(allocator, "");
-
-    const owned = try document.toOwnedText(allocator);
-    defer allocator.free(owned);
-    try testing.expectEqualStrings("hello\n", owned);
-}
-
-test "transfering row to owned text with empty rows" {
-    const allocator = testing.allocator;
-    var document = Editor{};
-    defer document.deinit(allocator);
-
-    try document.appendRow(allocator, "");
-
-    const owned = try document.toOwnedText(allocator);
-    defer allocator.free(owned);
-    try testing.expectEqualStrings("", owned);
-}
-
-test "transfering row to owned text with no rows" {
-    const allocator = testing.allocator;
-    var document = Editor{};
-    defer document.deinit(allocator);
-
-    const owned = try document.toOwnedText(allocator);
-    defer allocator.free(owned);
-    try testing.expectEqualStrings("", owned);
-}
-
+// SAVING
 test "saving file with text" {
     const allocator = testing.allocator;
     const io = testing.io;
@@ -561,6 +502,7 @@ test "save file with new file name" {
     try testing.expectEqualStrings("new contents", saved);
 }
 
+// REPLACING TEXT
 test "replacing char works on text" {
     const allocator = testing.allocator;
     var document = Editor{};
@@ -640,17 +582,7 @@ test "changing text shows unsaved_edits true" {
     try testing.expect(document.unsaved_edits);
 }
 
-test "scrolling changes render x" {
-    const allocator = testing.allocator;
-    var document = Editor{};
-    defer document.deinit(allocator);
-
-    try document.appendRow(allocator, "a\tj");
-    document.cursor_x = 2;
-    document.scroll(20, 20);
-    try testing.expectEqual(4, document.render_x);
-}
-
+// SEARCHING
 test "searching finds the string" {
     const allocator = testing.allocator;
     var document = Editor{};
@@ -660,15 +592,15 @@ test "searching finds the string" {
 
     try document.appendRow(allocator, "hello there world");
     try document.appendRow(allocator, "this is a new line");
-    try testing.expect(document.search("there"));
+    try testing.expect(document.search("there", 0));
     try testing.expectEqual(6, document.cursor_x);
     try testing.expectEqual(0, document.cursor_y);
 
-    try testing.expect(document.search("new"));
+    try testing.expect(document.search("new", 0));
     try testing.expectEqual(10, document.cursor_x);
     try testing.expectEqual(1, document.cursor_y);
 
-    try testing.expect(!document.search("none"));
+    try testing.expect(!document.search("none", 0));
     try testing.expectEqual(10, document.cursor_x);
     try testing.expectEqual(1, document.cursor_y);
 }
@@ -682,7 +614,81 @@ test "searching goes to first instance" {
 
     try document.appendRow(allocator, "hello there world");
     try document.appendRow(allocator, "hello there world");
-    try testing.expect(document.search("there"));
+    try testing.expect(document.search("there", 0));
     try testing.expectEqual(6, document.cursor_x);
     try testing.expectEqual(0, document.cursor_y);
+}
+
+// OTHER
+test "transfering row to owned text" {
+    const allocator = testing.allocator;
+    var document = Editor{};
+    defer document.deinit(allocator);
+
+    try document.appendRow(allocator, "hello");
+    try document.appendRow(allocator, "world");
+
+    const owned = try document.toOwnedText(allocator);
+    defer allocator.free(owned);
+    try testing.expectEqualStrings("hello\nworld", owned);
+}
+
+test "scrolling changes render x" {
+    const allocator = testing.allocator;
+    var document = Editor{};
+    defer document.deinit(allocator);
+
+    try document.appendRow(allocator, "a\tj");
+    document.cursor_x = 2;
+    document.scroll(20, 20);
+    try testing.expectEqual(4, document.render_x);
+}
+
+test "get current row" {
+    const allocator = testing.allocator;
+    var document = Editor{};
+    defer document.deinit(allocator);
+
+    try document.appendRow(allocator, "zero");
+    try document.appendRow(allocator, "one");
+    try document.appendRow(allocator, "two");
+    document.cursor_y = 2;
+
+    const row = document.currentRow() orelse return error.TestExpectedEqual;
+    try testing.expectEqualStrings("two", row.chars.items);
+}
+
+test "transfering row to owned text with empty line" {
+    const allocator = testing.allocator;
+    var document = Editor{};
+    defer document.deinit(allocator);
+
+    try document.appendRow(allocator, "hello");
+    try document.appendRow(allocator, "");
+
+    const owned = try document.toOwnedText(allocator);
+    defer allocator.free(owned);
+    try testing.expectEqualStrings("hello\n", owned);
+}
+
+test "transfering row to owned text with empty rows" {
+    const allocator = testing.allocator;
+    var document = Editor{};
+    defer document.deinit(allocator);
+
+    try document.appendRow(allocator, "");
+
+    const owned = try document.toOwnedText(allocator);
+    defer allocator.free(owned);
+    try testing.expectEqualStrings("", owned);
+}
+
+test "transfering row to owned text with no rows" {
+    const allocator = testing.allocator;
+    var document = Editor{};
+    defer document.deinit(allocator);
+
+    const owned = try document.toOwnedText(allocator);
+    defer allocator.free(owned);
+    try testing.expectEqualStrings("", owned);
 }

@@ -118,7 +118,6 @@ pub fn handleKey(
             }
             editor_state.pending_g = false;
         },
-        // ---
         .line_start => {
             document.cursor_x = 0;
             editor_state.pending_g = false;
@@ -144,21 +143,83 @@ pub fn handleKey(
         .page_up => {
             document.cursor_y = document.cursor_y -| document.rows_shown / 2;
         },
-        // TODO:
+        // TODO: get pos of chars to do this
         .next_word_start => {},
         .next_word_end => {},
         .last_word_start => {},
         .next_space_start => {},
         .next_space_end => {},
         .last_space_start => {},
-        // ---
 
         // MODES
         .normal => {
+            if (document.mode == .SEARCH) {
+                document.cursor_x = editor_state.cursor_origin_x;
+                document.cursor_y = editor_state.cursor_origin_y;
+            }
             editor_state.clearText(document);
             editor_state.replace_mult = false;
-            document.mode = .NORMAL;
         },
+        .visual => document.mode = .VISUAL,
+        .command => {
+            editor_state.clearText(document);
+            document.mode = .COMMAND;
+            // only append the ":" to the command line here
+            // the rest of the text is appended in .other
+            try editor_state.insertText(allocator, editor_state.command_cursor_x, ":");
+            editor_state.command_cursor_x += 1;
+        },
+        .search => {
+            editor_state.cursor_origin_x = document.cursor_x;
+            editor_state.cursor_origin_y = document.cursor_y;
+            editor_state.clearText(document);
+            document.mode = .SEARCH;
+            try editor_state.insertText(allocator, editor_state.command_cursor_x, "/");
+            editor_state.command_cursor_x += 1;
+        },
+        .replace => {
+            document.mode = .REPLACE;
+        },
+        .replace_mult => {
+            document.mode = .REPLACE;
+            editor_state.replace_mult = true;
+        },
+        .run_search => {
+            const found = document.search(editor_state.command_buffer.items[1..], 0);
+            try editor_state.setLastSearch(allocator);
+            editor_state.clearText(document);
+            editor_state.invalid_search = !found;
+        },
+        .run_command => {
+            if (std.mem.eql(u8, editor_state.command_buffer.items, ":w")) {
+                editor_state.save_requested = true;
+                editor_state.clearText(document);
+            } else if (std.mem.eql(u8, editor_state.command_buffer.items, ":wq")) {
+                editor_state.save_requested = true;
+                return true;
+            } else if (std.mem.startsWith(u8, editor_state.command_buffer.items, ":w ")) {
+                if (editor_state.command_buffer.items.len > 3) {
+                    const args = editor_state.command_buffer.items[3..];
+                    const filename = std.mem.trim(u8, args, " ");
+                    if (filename.len > 0) {
+                        try document.setFilenameAs(allocator, filename);
+                    }
+                }
+
+                editor_state.save_requested = true;
+                editor_state.clearText(document);
+            } else if (std.mem.eql(u8, editor_state.command_buffer.items, ":q") and !document.unsaved_edits) {
+                return true;
+            } else if (std.mem.eql(u8, editor_state.command_buffer.items, ":q!")) {
+                return true;
+            } else if (std.mem.eql(u8, editor_state.command_buffer.items, ":q") and document.unsaved_edits) {
+                editor_state.quit_blocked = true;
+            } else {
+                editor_state.invalid_command = true;
+            }
+        },
+
+        // INSERTING TEXT
         .insert_left => {
             document.mode = .INSERT;
         },
@@ -194,6 +255,8 @@ pub fn handleKey(
         .join_next_line => {
             try document.joinWithNextRow(allocator);
         },
+
+        // DELETING TEXT
         .delete_left => {
             if (document.mode == .COMMAND) {
                 if (editor_state.command_cursor_x > 1) {
@@ -205,7 +268,7 @@ pub fn handleKey(
                     editor_state.removeByte(editor_state.command_cursor_x - 1);
                     editor_state.command_cursor_x -= 1;
                 }
-                _ = document.search(editor_state.command_buffer.items[1..]);
+                _ = document.search(editor_state.command_buffer.items[1..], 0);
             } else if (document.cursor_x != 0) {
                 if (document.currentRow()) |row| {
                     try row.removeByte(document.cursor_x - 1, allocator);
@@ -240,61 +303,7 @@ pub fn handleKey(
         .delete_line_remaining => {
             try document.deleteRemainingLine(allocator);
         },
-        .visual => document.mode = .VISUAL,
-        .command => {
-            editor_state.clearText(document);
-            document.mode = .COMMAND;
-            // only append the ":" to the command line here
-            // the rest of the text is appended in .other
-            try editor_state.insertText(allocator, editor_state.command_cursor_x, ":");
-            editor_state.command_cursor_x += 1;
-        },
-        .search => {
-            editor_state.clearText(document);
-            document.mode = .SEARCH;
-            try editor_state.insertText(allocator, editor_state.command_cursor_x, "/");
-            editor_state.command_cursor_x += 1;
-        },
-        .replace => {
-            document.mode = .REPLACE;
-        },
-        .replace_mult => {
-            document.mode = .REPLACE;
-            editor_state.replace_mult = true;
-        },
-        .run_search => {
-            const found = document.search(editor_state.command_buffer.items[1..]);
-            editor_state.clearText(document);
-            editor_state.invalid_search = !found;
-        },
-        .run_command => {
-            if (std.mem.eql(u8, editor_state.command_buffer.items, ":w")) {
-                editor_state.save_requested = true;
-                editor_state.clearText(document);
-            } else if (std.mem.eql(u8, editor_state.command_buffer.items, ":wq")) {
-                editor_state.save_requested = true;
-                return true;
-            } else if (std.mem.startsWith(u8, editor_state.command_buffer.items, ":w ")) {
-                if (editor_state.command_buffer.items.len > 3) {
-                    const args = editor_state.command_buffer.items[3..];
-                    const filename = std.mem.trim(u8, args, " ");
-                    if (filename.len > 0) {
-                        try document.setFilenameAs(allocator, filename);
-                    }
-                }
 
-                editor_state.save_requested = true;
-                editor_state.clearText(document);
-            } else if (std.mem.eql(u8, editor_state.command_buffer.items, ":q") and !document.unsaved_edits) {
-                return true;
-            } else if (std.mem.eql(u8, editor_state.command_buffer.items, ":q!")) {
-                return true;
-            } else if (std.mem.eql(u8, editor_state.command_buffer.items, ":q") and document.unsaved_edits) {
-                editor_state.quit_blocked = true;
-            } else {
-                editor_state.invalid_command = true;
-            }
-        },
         .other => {
             editor_state.pending_g = false;
             editor_state.pending_d = false;
@@ -321,7 +330,7 @@ pub fn handleKey(
                 if (key.text) |text| {
                     try editor_state.insertText(allocator, editor_state.command_cursor_x, text);
                     editor_state.command_cursor_x += text.len;
-                    _ = document.search(editor_state.command_buffer.items[1..]);
+                    _ = document.search(editor_state.command_buffer.items[1..], 0);
                 }
             }
         },
@@ -419,20 +428,50 @@ fn clampCursorX(document: *editor.Editor) void {
     }
 }
 
-test "cursor clamps at final char in row when changing lines" {
+// -------------------------------------------------------
+// -------------------------------------------------------
+// TESTS
+// -------------------------------------------------------
+// -------------------------------------------------------
+
+// CHANGING MODES
+test "modes change" {
     const allocator = testing.allocator;
     var document: editor.Editor = .{};
     defer document.deinit(allocator);
     var editor_state: state.State = .{};
 
-    try document.appendRow(allocator, "this is a long line");
-    try document.appendRow(allocator, "short");
+    try document.appendRow(allocator, "first");
+    try document.appendRow(allocator, "second");
+    try document.appendRow(allocator, "third");
 
-    document.cursor_x = 18;
-    _ = try handleKey(.{ .codepoint = 'j' }, &document, &editor_state, allocator);
-    try testing.expect(document.cursor_x == 4);
+    try testing.expect(document.mode == .NORMAL);
+    try testing.expect(!(try handleKey(.{ .codepoint = 'i' }, &document, &editor_state, allocator)));
+    try testing.expect(document.mode == .INSERT);
+    try testing.expect(!(try handleKey(.{ .codepoint = vaxis.Key.escape }, &document, &editor_state, allocator)));
+    try testing.expect(!(try handleKey(.{ .codepoint = 'a' }, &document, &editor_state, allocator)));
+    try testing.expect(document.mode == .INSERT);
+
+    try testing.expect(!(try handleKey(.{ .codepoint = vaxis.Key.escape }, &document, &editor_state, allocator)));
+    try testing.expect(document.mode == .NORMAL);
+    try testing.expect(!(try handleKey(.{ .codepoint = 'r' }, &document, &editor_state, allocator)));
+    try testing.expect(document.mode == .REPLACE);
+    try testing.expect(!(try handleKey(.{ .codepoint = vaxis.Key.escape }, &document, &editor_state, allocator)));
+    try testing.expect(document.mode == .NORMAL);
+    try testing.expect(!(try handleKey(.{ .codepoint = 'R' }, &document, &editor_state, allocator)));
+    try testing.expect(document.mode == .REPLACE);
+
+    try testing.expect(!(try handleKey(.{ .codepoint = vaxis.Key.escape }, &document, &editor_state, allocator)));
+    try testing.expect(document.mode == .NORMAL);
+    try testing.expect(!(try handleKey(.{ .codepoint = 'v' }, &document, &editor_state, allocator)));
+    try testing.expect(document.mode == .VISUAL);
+    try testing.expect(!(try handleKey(.{ .codepoint = vaxis.Key.escape }, &document, &editor_state, allocator)));
+    try testing.expect(document.mode == .NORMAL);
+    try testing.expect(!(try handleKey(.{ .codepoint = 'V' }, &document, &editor_state, allocator)));
+    try testing.expect(document.mode == .VISUAL);
 }
 
+// MOVEMENT
 test "gg and G move to document boundaries" {
     const allocator = testing.allocator;
     var document: editor.Editor = .{};
@@ -488,6 +527,20 @@ test "$ and gl move to line end" {
     try testing.expect(editor_state.pending_g);
     try testing.expect(!(try handleKey(.{ .codepoint = 'l' }, &document, &editor_state, allocator)));
     try testing.expectEqual(@as(usize, 4), document.cursor_x);
+}
+
+test "cursor clamps at final char in row when changing lines" {
+    const allocator = testing.allocator;
+    var document: editor.Editor = .{};
+    defer document.deinit(allocator);
+    var editor_state: state.State = .{};
+
+    try document.appendRow(allocator, "this is a long line");
+    try document.appendRow(allocator, "short");
+
+    document.cursor_x = 18;
+    _ = try handleKey(.{ .codepoint = 'j' }, &document, &editor_state, allocator);
+    try testing.expect(document.cursor_x == 4);
 }
 
 test "hjkl work for movement in.NORMAL mode" {
@@ -588,41 +641,84 @@ test "arrows work for movement in all modes" {
     try testing.expect(!(try handleKey(.{ .codepoint = vaxis.Key.right }, &document, &editor_state, allocator)));
     try testing.expectEqual(@as(usize, 2), editor_state.command_cursor_x);
 }
+test "ctrl-u jumps half page up" {
+    const allocator = testing.allocator;
+    var editor_state = state.State{};
+    var document: editor.Editor = .{};
+    defer document.deinit(allocator);
+    defer editor_state.deinit(allocator);
 
-test "modes change" {
+    document.rows_shown = 10;
+    document.cursor_y = 10;
+    try testing.expect(!(try handleKey(.{ .codepoint = 'u', .mods = .{ .ctrl = true } }, &document, &editor_state, allocator)));
+    try testing.expect(document.cursor_y == 5);
+    try testing.expect(!(try handleKey(.{ .codepoint = 'u', .mods = .{ .ctrl = true } }, &document, &editor_state, allocator)));
+    try testing.expect(document.cursor_y == 0);
+    try testing.expect(!(try handleKey(.{ .codepoint = 'u', .mods = .{ .ctrl = true } }, &document, &editor_state, allocator)));
+    try testing.expect(document.cursor_y == 0);
+}
+
+test "ctrl-d jumps half page down" {
+    const allocator = testing.allocator;
+    var editor_state = state.State{};
+    var document: editor.Editor = .{};
+    defer document.deinit(allocator);
+    defer editor_state.deinit(allocator);
+
+    try document.appendRow(allocator, "hello");
+    try document.appendRow(allocator, "hello");
+    try document.appendRow(allocator, "hello");
+    try document.appendRow(allocator, "hello");
+    try document.appendRow(allocator, "hello");
+    try document.appendRow(allocator, "hello");
+    try document.appendRow(allocator, "hello");
+    try document.appendRow(allocator, "hello");
+    try document.appendRow(allocator, "hello");
+    try document.appendRow(allocator, "hello");
+    try document.appendRow(allocator, "hello");
+
+    document.rows_shown = 10;
+    try testing.expect(!(try handleKey(.{ .codepoint = 'd', .mods = .{ .ctrl = true } }, &document, &editor_state, allocator)));
+    try testing.expectEqual(5, document.cursor_y);
+    try testing.expect(!(try handleKey(.{ .codepoint = 'd', .mods = .{ .ctrl = true } }, &document, &editor_state, allocator)));
+    try testing.expectEqual(10, document.cursor_y);
+    try testing.expect(!(try handleKey(.{ .codepoint = 'd', .mods = .{ .ctrl = true } }, &document, &editor_state, allocator)));
+    try testing.expectEqual(10, document.cursor_y);
+}
+
+test "M jumps to midscreen" {
+    const allocator = testing.allocator;
+    var editor_state = state.State{};
+    var document: editor.Editor = .{};
+    defer document.deinit(allocator);
+    defer editor_state.deinit(allocator);
+}
+
+test "backspace moves left in normal mode" {
     const allocator = testing.allocator;
     var document: editor.Editor = .{};
     defer document.deinit(allocator);
     var editor_state: state.State = .{};
 
     try document.appendRow(allocator, "first");
-    try document.appendRow(allocator, "second");
-    try document.appendRow(allocator, "third");
+    document.cursor_x = 2;
 
-    try testing.expect(document.mode == .NORMAL);
+    try testing.expect(!(try handleKey(.{ .codepoint = vaxis.Key.backspace }, &document, &editor_state, allocator)));
+    try testing.expect(document.cursor_x == 1);
+}
+
+// INSERTING TEXT
+test "empty text on other keypress" {
+    const allocator = testing.allocator;
+    var document: editor.Editor = .{};
+    defer document.deinit(allocator);
+    var editor_state: state.State = .{};
+
     try testing.expect(!(try handleKey(.{ .codepoint = 'i' }, &document, &editor_state, allocator)));
     try testing.expect(document.mode == .INSERT);
-    try testing.expect(!(try handleKey(.{ .codepoint = vaxis.Key.escape }, &document, &editor_state, allocator)));
-    try testing.expect(!(try handleKey(.{ .codepoint = 'a' }, &document, &editor_state, allocator)));
-    try testing.expect(document.mode == .INSERT);
-
-    try testing.expect(!(try handleKey(.{ .codepoint = vaxis.Key.escape }, &document, &editor_state, allocator)));
-    try testing.expect(document.mode == .NORMAL);
-    try testing.expect(!(try handleKey(.{ .codepoint = 'r' }, &document, &editor_state, allocator)));
-    try testing.expect(document.mode == .REPLACE);
-    try testing.expect(!(try handleKey(.{ .codepoint = vaxis.Key.escape }, &document, &editor_state, allocator)));
-    try testing.expect(document.mode == .NORMAL);
-    try testing.expect(!(try handleKey(.{ .codepoint = 'R' }, &document, &editor_state, allocator)));
-    try testing.expect(document.mode == .REPLACE);
-
-    try testing.expect(!(try handleKey(.{ .codepoint = vaxis.Key.escape }, &document, &editor_state, allocator)));
-    try testing.expect(document.mode == .NORMAL);
-    try testing.expect(!(try handleKey(.{ .codepoint = 'v' }, &document, &editor_state, allocator)));
-    try testing.expect(document.mode == .VISUAL);
-    try testing.expect(!(try handleKey(.{ .codepoint = vaxis.Key.escape }, &document, &editor_state, allocator)));
-    try testing.expect(document.mode == .NORMAL);
-    try testing.expect(!(try handleKey(.{ .codepoint = 'V' }, &document, &editor_state, allocator)));
-    try testing.expect(document.mode == .VISUAL);
+    try testing.expect(document.cursor_x == 0);
+    try testing.expect(!(try handleKey(.{ .codepoint = 'b' }, &document, &editor_state, allocator)));
+    try testing.expect(document.rows.items.len == 0);
 }
 
 test "insert commands position cursor" {
@@ -681,105 +777,6 @@ test "inserting text with commands" {
     try testing.expect(!(try handleKey(.{ .codepoint = 'n', .text = "n" }, &document, &editor_state, allocator)));
     try testing.expectEqualStrings("ban", document.rows.items[document.cursor_y].chars.items);
     try testing.expect(document.cursor_x == 3);
-}
-
-test "ctrl-u jumps half page up" {
-    const allocator = testing.allocator;
-    var editor_state = state.State{};
-    var document: editor.Editor = .{};
-    defer document.deinit(allocator);
-    defer editor_state.deinit(allocator);
-
-    document.rows_shown = 10;
-    document.cursor_y = 10;
-    try testing.expect(!(try handleKey(.{ .codepoint = 'u', .mods = .{ .ctrl = true } }, &document, &editor_state, allocator)));
-    try testing.expect(document.cursor_y == 5);
-    try testing.expect(!(try handleKey(.{ .codepoint = 'u', .mods = .{ .ctrl = true } }, &document, &editor_state, allocator)));
-    try testing.expect(document.cursor_y == 0);
-    try testing.expect(!(try handleKey(.{ .codepoint = 'u', .mods = .{ .ctrl = true } }, &document, &editor_state, allocator)));
-    try testing.expect(document.cursor_y == 0);
-}
-
-test "ctrl-d jumps half page down" {
-    const allocator = testing.allocator;
-    var editor_state = state.State{};
-    var document: editor.Editor = .{};
-    defer document.deinit(allocator);
-    defer editor_state.deinit(allocator);
-
-    try document.appendRow(allocator, "hello");
-    try document.appendRow(allocator, "hello");
-    try document.appendRow(allocator, "hello");
-    try document.appendRow(allocator, "hello");
-    try document.appendRow(allocator, "hello");
-    try document.appendRow(allocator, "hello");
-    try document.appendRow(allocator, "hello");
-    try document.appendRow(allocator, "hello");
-    try document.appendRow(allocator, "hello");
-    try document.appendRow(allocator, "hello");
-    try document.appendRow(allocator, "hello");
-
-    document.rows_shown = 10;
-    try testing.expect(!(try handleKey(.{ .codepoint = 'd', .mods = .{ .ctrl = true } }, &document, &editor_state, allocator)));
-    try testing.expectEqual(5, document.cursor_y);
-    try testing.expect(!(try handleKey(.{ .codepoint = 'd', .mods = .{ .ctrl = true } }, &document, &editor_state, allocator)));
-    try testing.expectEqual(10, document.cursor_y);
-    try testing.expect(!(try handleKey(.{ .codepoint = 'd', .mods = .{ .ctrl = true } }, &document, &editor_state, allocator)));
-    try testing.expectEqual(10, document.cursor_y);
-}
-
-test "M jumps to midscreen" {
-    const allocator = testing.allocator;
-    var editor_state = state.State{};
-    var document: editor.Editor = .{};
-    defer document.deinit(allocator);
-    defer editor_state.deinit(allocator);
-}
-
-test "empty text on other keypress" {
-    const allocator = testing.allocator;
-    var document: editor.Editor = .{};
-    defer document.deinit(allocator);
-    var editor_state: state.State = .{};
-
-    try testing.expect(!(try handleKey(.{ .codepoint = 'i' }, &document, &editor_state, allocator)));
-    try testing.expect(document.mode == .INSERT);
-    try testing.expect(document.cursor_x == 0);
-    try testing.expect(!(try handleKey(.{ .codepoint = 'b' }, &document, &editor_state, allocator)));
-    try testing.expect(document.rows.items.len == 0);
-}
-
-test "backspace moves left in normal mode" {
-    const allocator = testing.allocator;
-    var document: editor.Editor = .{};
-    defer document.deinit(allocator);
-    var editor_state: state.State = .{};
-
-    try document.appendRow(allocator, "first");
-    document.cursor_x = 2;
-
-    try testing.expect(!(try handleKey(.{ .codepoint = vaxis.Key.backspace }, &document, &editor_state, allocator)));
-    try testing.expect(document.cursor_x == 1);
-}
-
-test "backspace deletes char in insert mode" {
-    const allocator = testing.allocator;
-    var document: editor.Editor = .{};
-    defer document.deinit(allocator);
-    var editor_state: state.State = .{};
-
-    document.mode = .INSERT;
-    try testing.expect(!(try handleKey(.{ .codepoint = vaxis.Key.backspace }, &document, &editor_state, allocator)));
-    try testing.expect(document.rows.items.len == 0);
-    try testing.expect(document.cursor_x == 0);
-
-    try document.appendRow(allocator, "first");
-    document.cursor_x = 2;
-    document.mode = .INSERT;
-
-    try testing.expect(!(try handleKey(.{ .codepoint = vaxis.Key.backspace }, &document, &editor_state, allocator)));
-    try testing.expectEqualStrings("frst", document.rows.items[0].chars.items);
-    try testing.expect(document.cursor_x == 1);
 }
 
 test "inserting new line with enter" {
@@ -904,71 +901,7 @@ test "inserting new line on empty file O" {
     try testing.expectEqualStrings("", document.rows.items[0].chars.items);
 }
 
-test "removing line with dd" {
-    const allocator = testing.allocator;
-    var document: editor.Editor = .{};
-    defer document.deinit(allocator);
-    var editor_state: state.State = .{};
-
-    try document.appendRow(allocator, "hello");
-    try document.appendRow(allocator, "world");
-    document.cursor_y = 1;
-
-    try testing.expect(document.rows.items.len == 2);
-    try testing.expect(!(try handleKey(.{ .codepoint = 'd' }, &document, &editor_state, allocator)));
-    try testing.expect(!(try handleKey(.{ .codepoint = 'd' }, &document, &editor_state, allocator)));
-    try testing.expect(document.rows.items.len == 1);
-    try testing.expect(document.cursor_y == 0);
-    try testing.expectEqualStrings("hello", document.rows.items[0].chars.items);
-
-    try document.appendRow(allocator, "world");
-    try document.appendRow(allocator, "world");
-    try testing.expectEqualStrings("hello", document.rows.items[0].chars.items);
-    try testing.expectEqualStrings("world", document.rows.items[1].chars.items);
-    try testing.expectEqualStrings("world", document.rows.items[2].chars.items);
-    document.cursor_y = 1;
-    try testing.expect(!(try handleKey(.{ .codepoint = 'd' }, &document, &editor_state, allocator)));
-    try testing.expect(!(try handleKey(.{ .codepoint = 'd' }, &document, &editor_state, allocator)));
-    try testing.expect(document.rows.items.len == 2);
-    try testing.expect(document.cursor_y == 1);
-}
-
-test "deleting line with dd does nothing on empty line" {
-    const allocator = testing.allocator;
-    var document: editor.Editor = .{};
-    defer document.deinit(allocator);
-    var editor_state: state.State = .{};
-
-    try testing.expect(!(try handleKey(.{ .codepoint = 'd' }, &document, &editor_state, allocator)));
-    try testing.expect(!(try handleKey(.{ .codepoint = 'd' }, &document, &editor_state, allocator)));
-    try testing.expect(document.rows.items.len == 0);
-}
-
-test "removing remainder of line with D" {
-    const allocator = testing.allocator;
-    var document: editor.Editor = .{};
-    defer document.deinit(allocator);
-    var editor_state: state.State = .{};
-
-    try document.appendRow(allocator, "hello");
-    document.cursor_x = 1;
-
-    try testing.expect(!(try handleKey(.{ .codepoint = 'D' }, &document, &editor_state, allocator)));
-    try testing.expectEqualStrings("h", document.rows.items[0].chars.items);
-}
-
-test "removing remainder of line with D does nothing in empty line" {
-    const allocator = testing.allocator;
-    var document: editor.Editor = .{};
-    defer document.deinit(allocator);
-    var editor_state: state.State = .{};
-
-    try testing.expect(!(try handleKey(.{ .codepoint = 'D' }, &document, &editor_state, allocator)));
-    try testing.expect(document.cursor_y == 0);
-    try testing.expect(document.cursor_x == 0);
-    try testing.expect(document.rows.items.len == 0);
-}
-
+// JOINING ROWS
 test "joining row with prev row" {
     const allocator = testing.allocator;
     var document: editor.Editor = .{};
@@ -1037,6 +970,7 @@ test "join row with next row does nothing at end of file" {
     try testing.expectEqualStrings(" world", document.rows.items[1].chars.items);
 }
 
+// DELETING TEXT
 test "x deletes char in normal mode" {
     const allocator = testing.allocator;
     var document: editor.Editor = .{};
@@ -1087,6 +1021,92 @@ test "X deletes prev char in normal mode" {
     try testing.expect(document.cursor_x == 0);
 }
 
+test "removing line with dd" {
+    const allocator = testing.allocator;
+    var document: editor.Editor = .{};
+    defer document.deinit(allocator);
+    var editor_state: state.State = .{};
+
+    try document.appendRow(allocator, "hello");
+    try document.appendRow(allocator, "world");
+    document.cursor_y = 1;
+
+    try testing.expect(document.rows.items.len == 2);
+    try testing.expect(!(try handleKey(.{ .codepoint = 'd' }, &document, &editor_state, allocator)));
+    try testing.expect(!(try handleKey(.{ .codepoint = 'd' }, &document, &editor_state, allocator)));
+    try testing.expect(document.rows.items.len == 1);
+    try testing.expect(document.cursor_y == 0);
+    try testing.expectEqualStrings("hello", document.rows.items[0].chars.items);
+
+    try document.appendRow(allocator, "world");
+    try document.appendRow(allocator, "world");
+    try testing.expectEqualStrings("hello", document.rows.items[0].chars.items);
+    try testing.expectEqualStrings("world", document.rows.items[1].chars.items);
+    try testing.expectEqualStrings("world", document.rows.items[2].chars.items);
+    document.cursor_y = 1;
+    try testing.expect(!(try handleKey(.{ .codepoint = 'd' }, &document, &editor_state, allocator)));
+    try testing.expect(!(try handleKey(.{ .codepoint = 'd' }, &document, &editor_state, allocator)));
+    try testing.expect(document.rows.items.len == 2);
+    try testing.expect(document.cursor_y == 1);
+}
+
+test "backspace deletes char in insert mode" {
+    const allocator = testing.allocator;
+    var document: editor.Editor = .{};
+    defer document.deinit(allocator);
+    var editor_state: state.State = .{};
+
+    document.mode = .INSERT;
+    try testing.expect(!(try handleKey(.{ .codepoint = vaxis.Key.backspace }, &document, &editor_state, allocator)));
+    try testing.expect(document.rows.items.len == 0);
+    try testing.expect(document.cursor_x == 0);
+
+    try document.appendRow(allocator, "first");
+    document.cursor_x = 2;
+    document.mode = .INSERT;
+
+    try testing.expect(!(try handleKey(.{ .codepoint = vaxis.Key.backspace }, &document, &editor_state, allocator)));
+    try testing.expectEqualStrings("frst", document.rows.items[0].chars.items);
+    try testing.expect(document.cursor_x == 1);
+}
+
+test "deleting line with dd does nothing on empty line" {
+    const allocator = testing.allocator;
+    var document: editor.Editor = .{};
+    defer document.deinit(allocator);
+    var editor_state: state.State = .{};
+
+    try testing.expect(!(try handleKey(.{ .codepoint = 'd' }, &document, &editor_state, allocator)));
+    try testing.expect(!(try handleKey(.{ .codepoint = 'd' }, &document, &editor_state, allocator)));
+    try testing.expect(document.rows.items.len == 0);
+}
+
+test "removing remainder of line with D" {
+    const allocator = testing.allocator;
+    var document: editor.Editor = .{};
+    defer document.deinit(allocator);
+    var editor_state: state.State = .{};
+
+    try document.appendRow(allocator, "hello");
+    document.cursor_x = 1;
+
+    try testing.expect(!(try handleKey(.{ .codepoint = 'D' }, &document, &editor_state, allocator)));
+    try testing.expectEqualStrings("h", document.rows.items[0].chars.items);
+}
+
+test "removing remainder of line with D does nothing in empty line" {
+    const allocator = testing.allocator;
+    var document: editor.Editor = .{};
+    defer document.deinit(allocator);
+    var editor_state: state.State = .{};
+
+    try testing.expect(!(try handleKey(.{ .codepoint = 'D' }, &document, &editor_state, allocator)));
+    try testing.expect(document.cursor_y == 0);
+    try testing.expect(document.cursor_x == 0);
+    try testing.expect(document.rows.items.len == 0);
+}
+
+// SAVING FILES
 test "save changes editor_state" {
     const allocator = testing.allocator;
     var document: editor.Editor = .{};
@@ -1130,6 +1150,18 @@ test "saving file with text" {
     try testing.expect(editor_state.save_requested);
 }
 
+// COMMAND MODE
+test "typing : enters command mode" {
+    const allocator = testing.allocator;
+    var editor_state = state.State{};
+    var document: editor.Editor = .{};
+    defer document.deinit(allocator);
+    defer editor_state.deinit(allocator);
+
+    try testing.expect(!(try handleKey(.{ .codepoint = ':' }, &document, &editor_state, allocator)));
+    try testing.expectEqual(.COMMAND, document.mode);
+}
+
 test "cursor can't move left of / or : in command bar" {
     const allocator = testing.allocator;
     var editor_state = state.State{};
@@ -1148,82 +1180,6 @@ test "cursor can't move left of / or : in command bar" {
     try testing.expect(!(try handleKey(.{ .codepoint = vaxis.Key.left }, &document, &editor_state, allocator)));
     try testing.expectEqual(1, editor_state.command_cursor_x);
     try testing.expect(!(try handleKey(.{ .codepoint = vaxis.Key.escape }, &document, &editor_state, allocator)));
-}
-
-test "typing : enters command mode" {
-    const allocator = testing.allocator;
-    var editor_state = state.State{};
-    var document: editor.Editor = .{};
-    defer document.deinit(allocator);
-    defer editor_state.deinit(allocator);
-
-    try testing.expect(!(try handleKey(.{ .codepoint = ':' }, &document, &editor_state, allocator)));
-    try testing.expectEqual(.COMMAND, document.mode);
-}
-
-test "typing / enters search mode" {
-    const allocator = testing.allocator;
-    var editor_state = state.State{};
-    var document: editor.Editor = .{};
-    defer document.deinit(allocator);
-    defer editor_state.deinit(allocator);
-
-    try testing.expect(!(try handleKey(.{ .codepoint = '/' }, &document, &editor_state, allocator)));
-    try testing.expectEqual(.SEARCH, document.mode);
-    try testing.expectEqualStrings("/", editor_state.command_buffer.items);
-    try testing.expectEqual(1, editor_state.command_cursor_x);
-}
-
-test "text handling in search mode" {
-    const allocator = testing.allocator;
-    var editor_state = state.State{};
-    var document: editor.Editor = .{};
-    defer document.deinit(allocator);
-    defer editor_state.deinit(allocator);
-
-    try testing.expect(!(try handleKey(.{ .codepoint = '/' }, &document, &editor_state, allocator)));
-    try testing.expectEqual(.SEARCH, document.mode);
-    try testing.expect(!(try handleKey(.{ .codepoint = 'w', .text = "w" }, &document, &editor_state, allocator)));
-    try testing.expect(!(try handleKey(.{ .codepoint = 'q', .text = "q" }, &document, &editor_state, allocator)));
-    try testing.expectEqualStrings("/wq", editor_state.command_buffer.items);
-    try testing.expect(!(try handleKey(.{ .codepoint = vaxis.Key.backspace }, &document, &editor_state, allocator)));
-    try testing.expectEqualStrings("/w", editor_state.command_buffer.items);
-    try testing.expectEqual(2, editor_state.command_cursor_x);
-}
-
-test "searching with /" {
-    const allocator = testing.allocator;
-    var editor_state = state.State{};
-    var document: editor.Editor = .{};
-    defer document.deinit(allocator);
-    defer editor_state.deinit(allocator);
-
-    try document.appendRow(allocator, "quit zag with wq or q or q!");
-
-    try testing.expect(!(try handleKey(.{ .codepoint = '/' }, &document, &editor_state, allocator)));
-    try testing.expectEqual(.SEARCH, document.mode);
-    try testing.expect(!(try handleKey(.{ .codepoint = 'w', .text = "w" }, &document, &editor_state, allocator)));
-    try testing.expect(!(try handleKey(.{ .codepoint = 'q', .text = "q" }, &document, &editor_state, allocator)));
-    try testing.expect(!editor_state.invalid_search);
-    try testing.expectEqual(14, document.cursor_x);
-    try testing.expectEqual(0, document.cursor_y);
-    try testing.expect(!(try handleKey(.{ .codepoint = vaxis.Key.enter }, &document, &editor_state, allocator)));
-    try testing.expectEqual(.NORMAL, document.mode);
-    try testing.expect(!editor_state.invalid_search);
-    try testing.expectEqual(14, document.cursor_x);
-    try testing.expectEqual(0, document.cursor_y);
-
-    try testing.expect(!(try handleKey(.{ .codepoint = '/' }, &document, &editor_state, allocator)));
-    try testing.expectEqual(.SEARCH, document.mode);
-    try testing.expect(!(try handleKey(.{ .codepoint = 'l', .text = "l" }, &document, &editor_state, allocator)));
-    try testing.expect(!editor_state.invalid_search);
-    try testing.expectEqual(14, document.cursor_x);
-    try testing.expectEqual(0, document.cursor_y);
-    try testing.expect(!(try handleKey(.{ .codepoint = vaxis.Key.enter }, &document, &editor_state, allocator)));
-    try testing.expectEqual(.NORMAL, document.mode);
-    try testing.expect(editor_state.invalid_search);
-    try testing.expectEqual(14, document.cursor_x);
-    try testing.expectEqual(0, document.cursor_y);
 }
 
 test "adding text in command line" {
@@ -1402,6 +1358,110 @@ test ":wq saves and quits" {
     try testing.expect(editor_state.save_requested == true);
 }
 
+// SEARCH MODE
+test "typing / enters search mode" {
+    const allocator = testing.allocator;
+    var editor_state = state.State{};
+    var document: editor.Editor = .{};
+    defer document.deinit(allocator);
+    defer editor_state.deinit(allocator);
+
+    try testing.expect(!(try handleKey(.{ .codepoint = '/' }, &document, &editor_state, allocator)));
+    try testing.expectEqual(.SEARCH, document.mode);
+    try testing.expectEqualStrings("/", editor_state.command_buffer.items);
+    try testing.expectEqual(1, editor_state.command_cursor_x);
+}
+
+test "enter copies buffer to last search" {
+    const allocator = testing.allocator;
+    var editor_state = state.State{};
+    var document: editor.Editor = .{};
+    defer document.deinit(allocator);
+    defer editor_state.deinit(allocator);
+
+    try testing.expect(!(try handleKey(.{ .codepoint = '/' }, &document, &editor_state, allocator)));
+    try testing.expect(!(try handleKey(.{ .codepoint = 'o', .text = "o" }, &document, &editor_state, allocator)));
+    try testing.expect(!(try handleKey(.{ .codepoint = vaxis.Key.enter }, &document, &editor_state, allocator)));
+    try testing.expectEqualStrings("o", editor_state.last_search.items);
+}
+
+test "escape from search returns cursor to last pos" {
+    const allocator = testing.allocator;
+    var editor_state = state.State{};
+    var document: editor.Editor = .{};
+    defer document.deinit(allocator);
+    defer editor_state.deinit(allocator);
+
+    try document.appendRow(allocator, "hello");
+    try document.appendRow(allocator, "world");
+    document.cursor_x = 4;
+    document.cursor_y = 1;
+
+    try testing.expect(!(try handleKey(.{ .codepoint = '/' }, &document, &editor_state, allocator)));
+    try testing.expectEqual(.SEARCH, document.mode);
+    try testing.expect(!(try handleKey(.{ .codepoint = 'l', .text = "l" }, &document, &editor_state, allocator)));
+    try testing.expect(!(try handleKey(.{ .codepoint = 'o', .text = "o" }, &document, &editor_state, allocator)));
+    try testing.expectEqual(3, document.cursor_x);
+    try testing.expectEqual(0, document.cursor_y);
+    try testing.expect(!(try handleKey(.{ .codepoint = vaxis.Key.escape }, &document, &editor_state, allocator)));
+    try testing.expectEqual(.NORMAL, document.mode);
+    try testing.expectEqual(4, document.cursor_x);
+    try testing.expectEqual(1, document.cursor_y);
+}
+
+test "text handling in search mode" {
+    const allocator = testing.allocator;
+    var editor_state = state.State{};
+    var document: editor.Editor = .{};
+    defer document.deinit(allocator);
+    defer editor_state.deinit(allocator);
+
+    try testing.expect(!(try handleKey(.{ .codepoint = '/' }, &document, &editor_state, allocator)));
+    try testing.expectEqual(.SEARCH, document.mode);
+    try testing.expect(!(try handleKey(.{ .codepoint = 'w', .text = "w" }, &document, &editor_state, allocator)));
+    try testing.expect(!(try handleKey(.{ .codepoint = 'q', .text = "q" }, &document, &editor_state, allocator)));
+    try testing.expectEqualStrings("/wq", editor_state.command_buffer.items);
+    try testing.expect(!(try handleKey(.{ .codepoint = vaxis.Key.backspace }, &document, &editor_state, allocator)));
+    try testing.expectEqualStrings("/w", editor_state.command_buffer.items);
+    try testing.expectEqual(2, editor_state.command_cursor_x);
+}
+
+test "searching with /" {
+    const allocator = testing.allocator;
+    var editor_state = state.State{};
+    var document: editor.Editor = .{};
+    defer document.deinit(allocator);
+    defer editor_state.deinit(allocator);
+
+    try document.appendRow(allocator, "quit zag with wq or q or q!");
+
+    try testing.expect(!(try handleKey(.{ .codepoint = '/' }, &document, &editor_state, allocator)));
+    try testing.expectEqual(.SEARCH, document.mode);
+    try testing.expect(!(try handleKey(.{ .codepoint = 'w', .text = "w" }, &document, &editor_state, allocator)));
+    try testing.expect(!(try handleKey(.{ .codepoint = 'q', .text = "q" }, &document, &editor_state, allocator)));
+    try testing.expect(!editor_state.invalid_search);
+    try testing.expectEqual(14, document.cursor_x);
+    try testing.expectEqual(0, document.cursor_y);
+    try testing.expect(!(try handleKey(.{ .codepoint = vaxis.Key.enter }, &document, &editor_state, allocator)));
+    try testing.expectEqual(.NORMAL, document.mode);
+    try testing.expect(!editor_state.invalid_search);
+    try testing.expectEqual(14, document.cursor_x);
+    try testing.expectEqual(0, document.cursor_y);
+
+    try testing.expect(!(try handleKey(.{ .codepoint = '/' }, &document, &editor_state, allocator)));
+    try testing.expectEqual(.SEARCH, document.mode);
+    try testing.expect(!(try handleKey(.{ .codepoint = 'l', .text = "l" }, &document, &editor_state, allocator)));
+    try testing.expect(!editor_state.invalid_search);
+    try testing.expectEqual(14, document.cursor_x);
+    try testing.expectEqual(0, document.cursor_y);
+    try testing.expect(!(try handleKey(.{ .codepoint = vaxis.Key.enter }, &document, &editor_state, allocator)));
+    try testing.expectEqual(.NORMAL, document.mode);
+    try testing.expect(editor_state.invalid_search);
+    try testing.expectEqual(14, document.cursor_x);
+    try testing.expectEqual(0, document.cursor_y);
+}
+
+// REPLACE MODE
 test "replacing text with r" {
     const allocator = testing.allocator;
     var editor_state = state.State{};

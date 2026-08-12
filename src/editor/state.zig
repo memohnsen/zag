@@ -4,23 +4,36 @@ const mem = std.mem;
 const editor = @import("editor.zig");
 
 pub const State = struct {
+    // Command line text
     command_buffer: std.ArrayList(u8) = .empty,
+    // Last search term in command buffer for n and N
+    last_search: std.ArrayList(u8) = .empty,
+    // Cursor location in command line
     command_cursor_x: usize = 0,
+    // where the cursor was prior to entering the command buffer
+    cursor_origin_x: usize = 0,
+    cursor_origin_y: usize = 0,
 
+    // These flags can be changed via keys in src/commands.zig
+    // if :w or :wq was entered
+    save_requested: bool = false,
+    // is a notif showing in the buffer or not
+    notif_started: ?std.Io.Timestamp = null,
+    // true if edits are not saved and :q! is not entered
+    quit_blocked: bool = false,
+    // not one of the predefined options
+    invalid_command: bool = false,
+    // search term not found
+    invalid_search: bool = false,
     // pending chars for multichar motions like gg, gl, gh, dd
     pending_g: bool = false,
     pending_d: bool = false,
-
+    // whether R was hit
     replace_mult: bool = false,
-
-    save_requested: bool = false,
-    notif_started: ?std.Io.Timestamp = null,
-    quit_blocked: bool = false,
-    invalid_command: bool = false,
-    invalid_search: bool = false,
 
     pub fn deinit(self: *State, allocator: std.mem.Allocator) void {
         self.command_buffer.deinit(allocator);
+        self.last_search.deinit(allocator);
     }
 
     pub fn insertText(
@@ -43,6 +56,11 @@ pub const State = struct {
         self.notif_started = null;
         self.command_cursor_x = 0;
         document.mode = .NORMAL;
+    }
+
+    pub fn setLastSearch(self: *State, allocator: mem.Allocator) !void {
+        self.last_search.clearRetainingCapacity();
+        try self.last_search.appendSlice(allocator, self.command_buffer.items[1..]);
     }
 
     pub fn showNotification(
@@ -68,6 +86,12 @@ pub const State = struct {
         }
     }
 };
+
+// -------------------------------------------------------
+// -------------------------------------------------------
+// TESTS
+// -------------------------------------------------------
+// -------------------------------------------------------
 
 test "text inserts into command bar" {
     var state = State{};

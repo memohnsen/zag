@@ -25,7 +25,7 @@ pub fn refresh(
 
     var screen_x: usize = 0;
     var screen_y: usize = 0;
-    if (document.mode == .COMMAND or document.mode == .SEARCH) {
+    if (document.mode == .COMMAND) {
         screen_x = editor_state.command_cursor_x;
         screen_y = window.height -| 1;
     } else {
@@ -129,6 +129,12 @@ fn printAt(
         },
     );
 }
+
+// -------------------------------------------------------
+// -------------------------------------------------------
+// TESTS
+// -------------------------------------------------------
+// -------------------------------------------------------
 
 test "unsaved edits icon" {
     var document = editor.Editor{};
