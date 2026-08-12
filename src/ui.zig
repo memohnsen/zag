@@ -25,11 +25,11 @@ pub fn refresh(
 
     var screen_x: usize = 0;
     var screen_y: usize = 0;
-    if (document.mode == .COMMAND) {
+    if (document.mode == .COMMAND or document.mode == .SEARCH) {
         screen_x = editor_state.command_cursor_x;
         screen_y = window.height -| 1;
     } else {
-        screen_x = document.cursor_x - document.col_offset;
+        screen_x = document.render_x - document.col_offset;
         screen_y = document.cursor_y - document.row_offset;
     }
     window.showCursor(@intCast(screen_x), @intCast(screen_y));
@@ -44,7 +44,7 @@ fn drawRows(window: vaxis.Window, document: *const editor.Editor) void {
         const file_row = document.row_offset + screen_row;
 
         if (file_row < document.rows.items.len) {
-            const chars = document.rows.items[file_row].chars.items;
+            const chars = document.rows.items[file_row].render.items;
             const start = @min(document.col_offset, chars.len);
             printAt(window, chars[start..], screen_row, 0);
             continue;

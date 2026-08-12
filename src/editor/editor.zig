@@ -10,6 +10,7 @@ pub const Mode = enum {
     VISUAL,
     COMMAND,
     REPLACE,
+    SEARCH,
 };
 
 pub const Editor = struct {
@@ -19,6 +20,7 @@ pub const Editor = struct {
     rows_shown: usize = 0,
     cursor_x: usize = 0,
     cursor_y: usize = 0,
+    render_x: usize = 0,
     // which row is currently the top row shown on the screen
     row_offset: usize = 0,
     // which col is currently the leftmost shown on the screen
@@ -172,18 +174,24 @@ pub const Editor = struct {
     }
 
     pub fn scroll(self: *Editor, screen_rows: usize, screen_cols: usize) void {
+        self.render_x = 0;
+        if (self.currentRow()) |row| {
+            self.render_x = row.cursorXtoRenderX(self.cursor_x);
+        }
         if (screen_rows == 0 or screen_cols == 0) return;
 
+        // vertical
         if (self.cursor_y < self.row_offset) {
             self.row_offset = self.cursor_y;
         } else if (self.cursor_y - self.row_offset >= screen_rows) {
             self.row_offset = self.cursor_y - screen_rows + 1;
         }
 
-        if (self.cursor_x < self.col_offset) {
-            self.col_offset = self.cursor_x;
-        } else if (self.cursor_x - self.col_offset >= screen_cols) {
-            self.col_offset = self.cursor_x - screen_cols + 1;
+        // horizontal
+        if (self.render_x < self.col_offset) {
+            self.col_offset = self.render_x;
+        } else if (self.render_x - self.col_offset >= screen_cols) {
+            self.col_offset = self.render_x - screen_cols + 1;
         }
     }
 
@@ -614,4 +622,15 @@ test "changing text shows unsaved_edits true" {
     try testing.expect(!document.unsaved_edits);
     try document.joinWithPrevRow(allocator);
     try testing.expect(document.unsaved_edits);
+}
+
+test "scrolling changes render x" {
+    const allocator = testing.allocator;
+    var document = Editor{};
+    defer document.deinit(allocator);
+
+    try document.appendRow(allocator, "a\tj");
+    document.cursor_x = 2;
+    document.scroll(20, 20);
+    try testing.expectEqual(4, document.render_x);
 }

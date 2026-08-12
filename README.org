@@ -25,6 +25,7 @@ Zag comes with most of the vim motions for manipulating and editing text.
  - <Backspace> to move back one char
  - <Enter> to move one row down
  - <$> or <gl> to move to last char in row
+ - <gh> / <_> to move to first char in row
  - <0> to move to start of the row
  - <gg> to move to first row
  - <G> to move to last row
@@ -33,7 +34,6 @@ Zag comes with most of the vim motions for manipulating and editing text.
  - <Ctrl-u> to go up half the screen
 
 ***** Upcoming
-- <gh> / <_> to move to first char in row
 - <b> move back one word to the first char
 - <B> move back until next space to the first char
 - <w> move forward one word to the first char
@@ -62,6 +62,7 @@ Zag comes with most of the vim motions for manipulating and editing text.
 **** Modes
  - <r> / <R> to enter replace mode
  - <v> / <V> to enter visual mode ( does nothing currently )
+ - </> to enter search mode
 
 ** Working with Zag
 Zag is written using the latest stable release of Zig (0.16)

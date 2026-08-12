@@ -48,6 +48,7 @@ const Command = enum {
     // MODES
     normal,
     command,
+    search,
     run_command,
     visual,
     replace,
@@ -74,15 +75,15 @@ pub fn handleKey(
     switch (command) {
         // NAVIGATION
         .left => {
-            if (document.mode == .COMMAND) {
-                if (editor_state.command_cursor_x > 0) editor_state.command_cursor_x -= 1;
+            if (document.mode == .COMMAND or document.mode == .SEARCH) {
+                if (editor_state.command_cursor_x - 1 > 0) editor_state.command_cursor_x -= 1;
             } else {
                 if (document.cursor_x > 0) document.cursor_x -= 1;
             }
         },
         .right => {
-            if (document.mode == .COMMAND) {
-                if (editor_state.command_cursor_x + 1 < editor_state.command_buffer.items.len) {
+            if (document.mode == .COMMAND or document.mode == .SEARCH) {
+                if (editor_state.command_cursor_x < editor_state.command_buffer.items.len) {
                     editor_state.command_cursor_x += 1;
                 }
             } else {
@@ -193,7 +194,7 @@ pub fn handleKey(
             try document.joinWithNextRow(allocator);
         },
         .delete_left => {
-            if (document.mode == .COMMAND) {
+            if (document.mode == .COMMAND or document.mode == .SEARCH) {
                 if (editor_state.command_cursor_x > 1) {
                     editor_state.removeByte(editor_state.command_cursor_x - 1);
                     editor_state.command_cursor_x -= 1;
@@ -241,6 +242,12 @@ pub fn handleKey(
             try editor_state.insertText(allocator, editor_state.command_cursor_x, ":");
             editor_state.command_cursor_x += 1;
         },
+        .search => {
+            editor_state.clearText(document);
+            document.mode = .SEARCH;
+            try editor_state.insertText(allocator, editor_state.command_cursor_x, "/");
+            editor_state.command_cursor_x += 1;
+        },
         .replace => {
             document.mode = .REPLACE;
         },
@@ -283,7 +290,7 @@ pub fn handleKey(
                 if (key.text) |text| {
                     try document.insertText(allocator, text);
                 }
-            } else if (document.mode == .COMMAND) {
+            } else if (document.mode == .COMMAND or document.mode == .SEARCH) {
                 if (key.text) |text| {
                     try editor_state.insertText(allocator, editor_state.command_cursor_x, text);
                     editor_state.command_cursor_x += text.len;
@@ -351,7 +358,7 @@ fn commandFromKey(key: vaxis.Key, document: *editor.Editor, pending_g: bool) Com
     if (key.matches('J', .{}) and document.mode == .NORMAL) return .join_next_line;
 
     // DELETION
-    if (key.matches(vaxis.Key.backspace, .{}) and (document.mode == .INSERT or document.mode == .COMMAND)) return .delete_left;
+    if (key.matches(vaxis.Key.backspace, .{}) and (document.mode == .INSERT or document.mode == .COMMAND or document.mode == .SEARCH)) return .delete_left;
     if (key.matches('x', .{}) and document.mode == .NORMAL) return .delete_current;
     if (key.matches('X', .{}) and document.mode == .NORMAL) return .delete_left;
     if (key.matches('d', .{}) and document.mode == .NORMAL) return .delete_line;
@@ -364,6 +371,7 @@ fn commandFromKey(key: vaxis.Key, document: *editor.Editor, pending_g: bool) Com
     if (key.matches('V', .{}) and document.mode == .NORMAL) return .visual;
     if (key.matches(':', .{}) and document.mode == .NORMAL) return .command;
     if (key.matches(vaxis.Key.enter, .{}) and document.mode == .COMMAND) return .run_command;
+    if (key.matches('/', .{}) and document.mode == .NORMAL) return .search;
 
     // ARROWS
     return switch (key.codepoint) {
@@ -547,10 +555,19 @@ test "arrows work for movement in all modes" {
 
     document.mode = .COMMAND;
     try editor_state.insertText(allocator, editor_state.command_cursor_x, "wq");
-    try testing.expect(!(try handleKey(.{ .codepoint = vaxis.Key.right }, &document, &editor_state, allocator)));
-    try testing.expectEqual(@as(usize, 1), editor_state.command_cursor_x);
+    editor_state.command_cursor_x = 1;
     try testing.expect(!(try handleKey(.{ .codepoint = vaxis.Key.left }, &document, &editor_state, allocator)));
-    try testing.expectEqual(@as(usize, 0), editor_state.command_cursor_x);
+    try testing.expectEqual(@as(usize, 1), editor_state.command_cursor_x);
+    try testing.expect(!(try handleKey(.{ .codepoint = vaxis.Key.right }, &document, &editor_state, allocator)));
+    try testing.expectEqual(@as(usize, 2), editor_state.command_cursor_x);
+
+    document.mode = .SEARCH;
+    try editor_state.insertText(allocator, editor_state.command_cursor_x, "wq");
+    editor_state.command_cursor_x = 1;
+    try testing.expect(!(try handleKey(.{ .codepoint = vaxis.Key.left }, &document, &editor_state, allocator)));
+    try testing.expectEqual(@as(usize, 1), editor_state.command_cursor_x);
+    try testing.expect(!(try handleKey(.{ .codepoint = vaxis.Key.right }, &document, &editor_state, allocator)));
+    try testing.expectEqual(@as(usize, 2), editor_state.command_cursor_x);
 }
 
 test "modes change" {
@@ -1091,7 +1108,66 @@ test "saving file with text" {
     try testing.expect(!(try handleKey(.{ .codepoint = 'w', .text = "w" }, &document, &editor_state, allocator)));
     try testing.expect(!(try handleKey(.{ .codepoint = vaxis.Key.enter }, &document, &editor_state, allocator)));
     try testing.expectEqualStrings("hello\nworld", saved);
-    try testing.expect(editor_state.save_requested == true);
+    try testing.expect(editor_state.save_requested);
+}
+
+test "cursor can't move left of / or : in command bar" {
+    const allocator = testing.allocator;
+    var editor_state = state.State{};
+    var document: editor.Editor = .{};
+    defer document.deinit(allocator);
+    defer editor_state.deinit(allocator);
+
+    try testing.expect(!(try handleKey(.{ .codepoint = '/' }, &document, &editor_state, allocator)));
+    try testing.expectEqual(1, editor_state.command_cursor_x);
+    try testing.expect(!(try handleKey(.{ .codepoint = vaxis.Key.left }, &document, &editor_state, allocator)));
+    try testing.expect(!(try handleKey(.{ .codepoint = vaxis.Key.escape }, &document, &editor_state, allocator)));
+
+    try testing.expect(!(try handleKey(.{ .codepoint = ':' }, &document, &editor_state, allocator)));
+    try testing.expectEqual(1, editor_state.command_cursor_x);
+    try testing.expect(!(try handleKey(.{ .codepoint = vaxis.Key.left }, &document, &editor_state, allocator)));
+    try testing.expect(!(try handleKey(.{ .codepoint = vaxis.Key.escape }, &document, &editor_state, allocator)));
+}
+
+test "typing : enters command mode" {
+    const allocator = testing.allocator;
+    var editor_state = state.State{};
+    var document: editor.Editor = .{};
+    defer document.deinit(allocator);
+    defer editor_state.deinit(allocator);
+
+    try testing.expect(!(try handleKey(.{ .codepoint = ':' }, &document, &editor_state, allocator)));
+    try testing.expectEqual(.COMMAND, document.mode);
+}
+
+test "typing / enters search mode" {
+    const allocator = testing.allocator;
+    var editor_state = state.State{};
+    var document: editor.Editor = .{};
+    defer document.deinit(allocator);
+    defer editor_state.deinit(allocator);
+
+    try testing.expect(!(try handleKey(.{ .codepoint = '/' }, &document, &editor_state, allocator)));
+    try testing.expectEqual(.SEARCH, document.mode);
+    try testing.expectEqualStrings("/", editor_state.command_buffer.items);
+    try testing.expectEqual(1, editor_state.command_cursor_x);
+}
+
+test "text handling in search mode" {
+    const allocator = testing.allocator;
+    var editor_state = state.State{};
+    var document: editor.Editor = .{};
+    defer document.deinit(allocator);
+    defer editor_state.deinit(allocator);
+
+    try testing.expect(!(try handleKey(.{ .codepoint = '/' }, &document, &editor_state, allocator)));
+    try testing.expectEqual(.SEARCH, document.mode);
+    try testing.expect(!(try handleKey(.{ .codepoint = 'w', .text = "w" }, &document, &editor_state, allocator)));
+    try testing.expect(!(try handleKey(.{ .codepoint = 'q', .text = "q" }, &document, &editor_state, allocator)));
+    try testing.expectEqualStrings("/wq", editor_state.command_buffer.items);
+    try testing.expect(!(try handleKey(.{ .codepoint = vaxis.Key.backspace }, &document, &editor_state, allocator)));
+    try testing.expectEqualStrings("/w", editor_state.command_buffer.items);
+    try testing.expectEqual(2, editor_state.command_cursor_x);
 }
 
 test "adding text in command line" {

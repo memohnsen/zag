@@ -48,6 +48,19 @@ pub const Row = struct {
             }
         }
     }
+
+    pub fn cursorXtoRenderX(self: *const Row, cursor_x: usize) usize {
+        var renderX: usize = 0;
+        for (self.chars.items[0..cursor_x]) |char| {
+            if (char == '\t') {
+                const tab_width = 4 - (renderX % 4);
+                renderX += tab_width;
+            } else {
+                renderX += 1;
+            }
+        }
+        return renderX;
+    }
 };
 
 test "byte is removed from line" {
@@ -94,4 +107,16 @@ test "\t within word renders" {
     try row.insertText(allocator, 0, "a\th");
     try testing.expectEqualStrings("a   h", row.render.items);
     try testing.expectEqualStrings("a\th", row.chars.items);
+}
+
+test "cursor x to render x" {
+    var row = Row{};
+    const allocator = testing.allocator;
+    defer row.deinit(allocator);
+
+    try row.insertText(allocator, 0, "a\th");
+    try testing.expectEqual(0, row.cursorXtoRenderX(0));
+    try testing.expectEqual(1, row.cursorXtoRenderX(1));
+    try testing.expectEqual(4, row.cursorXtoRenderX(2));
+    try testing.expectEqual(5, row.cursorXtoRenderX(3));
 }
