@@ -18,6 +18,19 @@ pub const SearchDirection = enum {
     backward,
 };
 
+pub const FileType = enum {
+    text,
+    zig,
+    c,
+    cpp,
+    rust,
+    odin,
+    ruby,
+    php,
+    javascript,
+    typescript,
+};
+
 pub const Editor = struct {
     // the total rows of the file
     rows: std.ArrayList(Row) = .empty,
@@ -333,6 +346,33 @@ pub const Editor = struct {
             },
         }
         return false;
+    }
+
+    pub fn getFileType(self: *const Editor) FileType {
+        const filename = self.filename orelse return .text;
+        const extension = std.fs.path.extension(filename);
+
+        if (mem.eql(u8, extension, ".zig")) {
+            return .zig;
+        } else if (mem.eql(u8, extension, ".c") or mem.eql(u8, extension, ".h")) {
+            return .c;
+        } else if (mem.eql(u8, extension, ".rs")) {
+            return .rust;
+        } else if (mem.eql(u8, extension, ".cpp") or mem.eql(u8, extension, ".cc") or mem.eql(u8, extension, ".cxx") or mem.eql(u8, extension, ".hpp")) {
+            return .cpp;
+        } else if (mem.eql(u8, extension, ".rb")) {
+            return .ruby;
+        } else if (mem.eql(u8, extension, ".odin")) {
+            return .odin;
+        } else if (mem.eql(u8, extension, ".php")) {
+            return .php;
+        } else if (mem.eql(u8, extension, ".ts") or mem.eql(u8, extension, ".tsx")) {
+            return .typescript;
+        } else if (mem.eql(u8, extension, ".js") or mem.eql(u8, extension, ".jsx")) {
+            return .javascript;
+        } else {
+            return .text;
+        }
     }
 };
 
@@ -731,6 +771,49 @@ test "searching back" {
     try testing.expect(document.search("there", document.cursor_y, document.cursor_x, .backward));
     try testing.expectEqual(6, document.cursor_x);
     try testing.expectEqual(0, document.cursor_y);
+}
+
+// FILETYPE
+test "test file type" {
+    const allocator = testing.allocator;
+    var document = Editor{};
+    defer document.deinit(allocator);
+
+    try testing.expectEqual(.text, document.getFileType());
+    try document.setFilenameAs(allocator, "hello.zig");
+    try testing.expectEqual(.zig, document.getFileType());
+    try document.setFilenameAs(allocator, "hello.c");
+    try testing.expectEqual(.c, document.getFileType());
+    try document.setFilenameAs(allocator, "hello.h");
+    try testing.expectEqual(.c, document.getFileType());
+    try document.setFilenameAs(allocator, "hello.cpp");
+    try testing.expectEqual(.cpp, document.getFileType());
+    try document.setFilenameAs(allocator, "hello.cxx");
+    try testing.expectEqual(.cpp, document.getFileType());
+    try document.setFilenameAs(allocator, "hello.hpp");
+    try testing.expectEqual(.cpp, document.getFileType());
+    try document.setFilenameAs(allocator, "hello.cc");
+    try testing.expectEqual(.cpp, document.getFileType());
+    try document.setFilenameAs(allocator, "hello.rs");
+    try testing.expectEqual(.rust, document.getFileType());
+    try document.setFilenameAs(allocator, "hello.rb");
+    try testing.expectEqual(.ruby, document.getFileType());
+    try document.setFilenameAs(allocator, "hello.txt");
+    try testing.expectEqual(.text, document.getFileType());
+    try document.setFilenameAs(allocator, "hello.text");
+    try testing.expectEqual(.text, document.getFileType());
+    try document.setFilenameAs(allocator, "hello.php");
+    try testing.expectEqual(.php, document.getFileType());
+    try document.setFilenameAs(allocator, "hello.js");
+    try testing.expectEqual(.javascript, document.getFileType());
+    try document.setFilenameAs(allocator, "hello.jsx");
+    try testing.expectEqual(.javascript, document.getFileType());
+    try document.setFilenameAs(allocator, "hello.ts");
+    try testing.expectEqual(.typescript, document.getFileType());
+    try document.setFilenameAs(allocator, "hello.tsx");
+    try testing.expectEqual(.typescript, document.getFileType());
+    try document.setFilenameAs(allocator, "hello.odin");
+    try testing.expectEqual(.odin, document.getFileType());
 }
 
 // OTHER

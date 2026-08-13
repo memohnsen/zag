@@ -1,9 +1,21 @@
 * Roadmap for Zag
-** Coming Soon
-- [X] Finsh wiring up command buffer
+** Finish tutorial
+- [ ] Filetype detection from the filename
+- [ ] Displaying the filetype in the status bar
+- [ ] Highlighting the active search match
+- [ ] Rendering nonprintable characters
+- [ ] Tracking row indexes
+- [ ] Propagating multiline-comment state between rows
+
+** Post tutorial
+- [ ] add ui testing library like cargo insta
+- [ ] scroll buffer
 - [ ] basic config file
 - [ ] base themes
 - [ ] line nums and relative line nums
+- [ ] auto indent
+- [ ] search match highlighting
+- [ ] treesitter for highlighting
 
 ** Far off
 - [ ] file tab line

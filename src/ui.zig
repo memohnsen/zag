@@ -74,7 +74,7 @@ fn drawStatusBar(
     // Show filename and lines in file
     const file: []const u8 = if (document.filename) |name| name else "[No File]";
     const edits_icon = unsavedEditsIcon(document);
-    const file_text = try std.fmt.bufPrint(file_buf, " {s} | {s}{s} - {d} lines", .{ @tagName(document.mode), file, edits_icon, document.rows.items.len });
+    const file_text = try std.fmt.bufPrint(file_buf, " {s} | {s}{s} - {d} lines | {s}", .{ @tagName(document.mode), file, edits_icon, document.rows.items.len, @tagName(document.getFileType()) });
     _ = status_window.printSegment(.{ .text = file_text, .style = .{ .reverse = true } }, .{ .wrap = .none });
 
     // Show cursor position

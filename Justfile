@@ -1,6 +1,6 @@
 # Run the editor opening a test file
 run:
-    zig build run -- ./test.txt
+    zig build run -- ./test.zig
 
 # Run the editor opening the welcome screen
 welcome:
