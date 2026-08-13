@@ -13,6 +13,11 @@ pub const Mode = enum {
     SEARCH,
 };
 
+pub const SearchDirection = enum {
+    forward,
+    backward,
+};
+
 pub const Editor = struct {
     // the total rows of the file
     rows: std.ArrayList(Row) = .empty,
@@ -236,23 +241,108 @@ pub const Editor = struct {
         self.filename = name;
     }
 
-    pub fn search(self: *Editor, query: []const u8) bool {
-        if (query.len == 0) {
+    // Searching forward starts at the start row and col looping to the end of the file
+    // Then it jumps to the start of the file to the current line
+    // Then finally we must go back to start line and check chars to where the cursor started
+    //
+    // Searching backward is the same we just start with start line check first
+    pub fn search(
+        self: *Editor,
+        query: []const u8,
+        start_row: usize,
+        start_col: usize,
+        direction: SearchDirection,
+    ) bool {
+        if (query.len == 0 or start_row >= self.rows.items.len) {
             return false;
         }
 
-        for (self.rows.items, 0..) |row, row_index| {
-            if (mem.indexOf(u8, row.chars.items, query)) |col_index| {
-                self.cursor_y = row_index;
-                self.cursor_x = col_index;
-                return true;
-            }
-        }
+        switch (direction) {
+            .forward => {
+                for (self.rows.items[start_row..], start_row..) |row, row_index| {
+                    var slice_start: usize = 0;
+                    if (row_index == start_row) {
+                        slice_start = @min(start_col, row.chars.items.len);
+                    }
 
+                    if (mem.indexOf(u8, row.chars.items[slice_start..], query)) |col_index| {
+                        self.cursor_y = row_index;
+                        self.cursor_x = col_index + slice_start;
+                        return true;
+                    }
+                }
+
+                for (self.rows.items[0..start_row], 0..start_row) |row, row_index| {
+                    if (mem.indexOf(u8, row.chars.items, query)) |col_index| {
+                        self.cursor_y = row_index;
+                        self.cursor_x = col_index;
+                        return true;
+                    }
+                }
+
+                const chars = self.rows.items[start_row].chars.items;
+                const col = @min(start_col, chars.len);
+
+                if (mem.indexOf(u8, chars, query)) |col_index| {
+                    if (col_index < col) {
+                        self.cursor_y = start_row;
+                        self.cursor_x = col_index;
+                        return true;
+                    }
+                }
+            },
+            .backward => {
+                const chars = self.rows.items[start_row].chars.items;
+                const col = @min(start_col, chars.len);
+
+                if (mem.lastIndexOf(u8, chars[0..col], query)) |col_index| {
+                    if (col_index < col) {
+                        self.cursor_y = start_row;
+                        self.cursor_x = col_index;
+                        return true;
+                    }
+                }
+
+                var row_index = start_row;
+                while (row_index > 0) {
+                    row_index -= 1;
+                    if (mem.lastIndexOf(u8, self.rows.items[row_index].chars.items, query)) |col_index| {
+                        self.cursor_y = row_index;
+                        self.cursor_x = col_index;
+                        return true;
+                    }
+                }
+
+                var row_index_from_bottom = self.rows.items.len;
+                while (row_index_from_bottom > start_row + 1) {
+                    row_index_from_bottom -= 1;
+                    if (mem.lastIndexOf(u8, self.rows.items[row_index_from_bottom].chars.items, query)) |col_index| {
+                        self.cursor_y = row_index_from_bottom;
+                        self.cursor_x = col_index;
+                        return true;
+                    }
+                }
+
+                if (mem.lastIndexOf(u8, chars, query)) |col_index| {
+                    if (col_index >= col) {
+                        self.cursor_y = start_row;
+                        self.cursor_x = col_index;
+                        return true;
+                    }
+                }
+            },
+        }
         return false;
     }
 };
 
+// -------------------------------------------------------
+// -------------------------------------------------------
+// TESTS
+// -------------------------------------------------------
+// -------------------------------------------------------
+
+// INSERTING TEXT
 test "appending rows" {
     const allocator = testing.allocator;
     var document = Editor{};
@@ -592,20 +682,20 @@ test "searching finds the string" {
 
     try document.appendRow(allocator, "hello there world");
     try document.appendRow(allocator, "this is a new line");
-    try testing.expect(document.search("there", 0));
+    try testing.expect(document.search("there", 0, 0, .forward));
     try testing.expectEqual(6, document.cursor_x);
     try testing.expectEqual(0, document.cursor_y);
 
-    try testing.expect(document.search("new", 0));
+    try testing.expect(document.search("new", 0, 0, .forward));
     try testing.expectEqual(10, document.cursor_x);
     try testing.expectEqual(1, document.cursor_y);
 
-    try testing.expect(!document.search("none", 0));
+    try testing.expect(!document.search("none", 0, 0, .forward));
     try testing.expectEqual(10, document.cursor_x);
     try testing.expectEqual(1, document.cursor_y);
 }
 
-test "searching goes to first instance" {
+test "searching forward" {
     const allocator = testing.allocator;
     var document = Editor{};
     defer document.deinit(allocator);
@@ -614,7 +704,31 @@ test "searching goes to first instance" {
 
     try document.appendRow(allocator, "hello there world");
     try document.appendRow(allocator, "hello there world");
-    try testing.expect(document.search("there", 0));
+    try testing.expect(document.search("there", document.cursor_y, document.cursor_x + 1, .forward));
+    try testing.expectEqual(6, document.cursor_x);
+    try testing.expectEqual(0, document.cursor_y);
+
+    try testing.expect(document.search("there", document.cursor_y, document.cursor_x + 1, .forward));
+    try testing.expectEqual(6, document.cursor_x);
+    try testing.expectEqual(1, document.cursor_y);
+}
+
+test "searching back" {
+    const allocator = testing.allocator;
+    var document = Editor{};
+    defer document.deinit(allocator);
+    var editor_state = state.State{};
+    defer editor_state.deinit(allocator);
+
+    document.cursor_x = 13;
+    document.cursor_y = 1;
+    try document.appendRow(allocator, "hello there world");
+    try document.appendRow(allocator, "hello there world");
+    try testing.expect(document.search("there", document.cursor_y, document.cursor_x, .backward));
+    try testing.expectEqual(6, document.cursor_x);
+    try testing.expectEqual(1, document.cursor_y);
+
+    try testing.expect(document.search("there", document.cursor_y, document.cursor_x, .backward));
     try testing.expectEqual(6, document.cursor_x);
     try testing.expectEqual(0, document.cursor_y);
 }

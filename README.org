@@ -63,6 +63,8 @@ Zag comes with most of the vim motions for manipulating and editing text.
  - <r> / <R> to enter replace mode
  - <v> / <V> to enter visual mode ( does nothing currently )
  - </> to enter search mode
+ - <n> after pressing enter on a search query to go to next occurence
+ - <N> after pressing enter on a search query to go to previous occurence
 
 ** Working with Zag
 Zag is written using the latest stable release of Zig (0.16)

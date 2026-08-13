@@ -3,6 +3,7 @@ const mem = std.mem;
 const testing = std.testing;
 
 const vaxis = @import("vaxis");
+
 const editor = @import("editor/editor.zig");
 const state = @import("editor/state.zig");
 
@@ -50,6 +51,8 @@ const Command = enum {
     command,
     run_command,
     search,
+    search_next,
+    search_prev,
     run_search,
     visual,
     replace,
@@ -177,6 +180,18 @@ pub fn handleKey(
             try editor_state.insertText(allocator, editor_state.command_cursor_x, "/");
             editor_state.command_cursor_x += 1;
         },
+        .search_next => {
+            if (editor_state.last_search.items.len != 0) {
+                const found = document.search(editor_state.last_search.items, document.cursor_y, document.cursor_x + 1, .forward);
+                editor_state.invalid_search = !found;
+            }
+        },
+        .search_prev => {
+            if (editor_state.last_search.items.len != 0) {
+                const found = document.search(editor_state.last_search.items, document.cursor_y, document.cursor_x, .backward);
+                editor_state.invalid_search = !found;
+            }
+        },
         .replace => {
             document.mode = .REPLACE;
         },
@@ -185,7 +200,7 @@ pub fn handleKey(
             editor_state.replace_mult = true;
         },
         .run_search => {
-            const found = document.search(editor_state.command_buffer.items[1..], 0);
+            const found = document.search(editor_state.command_buffer.items[1..], editor_state.cursor_origin_y, editor_state.cursor_origin_x, .forward);
             try editor_state.setLastSearch(allocator);
             editor_state.clearText(document);
             editor_state.invalid_search = !found;
@@ -268,7 +283,7 @@ pub fn handleKey(
                     editor_state.removeByte(editor_state.command_cursor_x - 1);
                     editor_state.command_cursor_x -= 1;
                 }
-                _ = document.search(editor_state.command_buffer.items[1..], 0);
+                _ = document.search(editor_state.command_buffer.items[1..], editor_state.cursor_origin_y, editor_state.cursor_origin_x, .forward);
             } else if (document.cursor_x != 0) {
                 if (document.currentRow()) |row| {
                     try row.removeByte(document.cursor_x - 1, allocator);
@@ -330,7 +345,7 @@ pub fn handleKey(
                 if (key.text) |text| {
                     try editor_state.insertText(allocator, editor_state.command_cursor_x, text);
                     editor_state.command_cursor_x += text.len;
-                    _ = document.search(editor_state.command_buffer.items[1..], 0);
+                    _ = document.search(editor_state.command_buffer.items[1..], editor_state.cursor_origin_y, editor_state.cursor_origin_x, .forward);
                 }
             }
         },
@@ -348,7 +363,6 @@ fn commandFromKey(key: vaxis.Key, document: *editor.Editor, pending_g: bool) Com
     if (key.matches('0', .{}) and document.mode == .NORMAL) return .line_start;
     if (key.matches('h', .{}) and document.mode == .NORMAL and pending_g) return .first_char;
     if (key.matches('_', .{}) and document.mode == .NORMAL) return .first_char;
-    // -----------------------------
     if (key.matches('$', .{}) and document.mode == .NORMAL) return .line_end;
     if (key.matches('l', .{}) and document.mode == .NORMAL and pending_g) return .line_end;
     if (key.matches('g', .{}) and document.mode == .NORMAL) return .doc_start_gg;
@@ -399,6 +413,8 @@ fn commandFromKey(key: vaxis.Key, document: *editor.Editor, pending_g: bool) Com
     if (key.matches(':', .{}) and document.mode == .NORMAL) return .command;
     if (key.matches(vaxis.Key.enter, .{}) and document.mode == .COMMAND) return .run_command;
     if (key.matches('/', .{}) and document.mode == .NORMAL) return .search;
+    if (key.matches('n', .{}) and document.mode == .NORMAL) return .search_next;
+    if (key.matches('N', .{}) and document.mode == .NORMAL) return .search_prev;
     if (key.matches(vaxis.Key.enter, .{}) and document.mode == .SEARCH) return .run_search;
 
     // ARROWS
@@ -1457,6 +1473,112 @@ test "searching with /" {
     try testing.expect(!(try handleKey(.{ .codepoint = vaxis.Key.enter }, &document, &editor_state, allocator)));
     try testing.expectEqual(.NORMAL, document.mode);
     try testing.expect(editor_state.invalid_search);
+    try testing.expectEqual(14, document.cursor_x);
+    try testing.expectEqual(0, document.cursor_y);
+}
+
+test "searching forward" {
+    const allocator = testing.allocator;
+    var editor_state = state.State{};
+    var document: editor.Editor = .{};
+    defer document.deinit(allocator);
+    defer editor_state.deinit(allocator);
+
+    try document.appendRow(allocator, "quit zag with wq or q or q!");
+    try document.appendRow(allocator, "quit zag with wq or q or q!");
+
+    try testing.expect(!(try handleKey(.{ .codepoint = '/' }, &document, &editor_state, allocator)));
+    try testing.expectEqual(.SEARCH, document.mode);
+    try testing.expect(!(try handleKey(.{ .codepoint = 'w', .text = "w" }, &document, &editor_state, allocator)));
+    try testing.expect(!(try handleKey(.{ .codepoint = 'q', .text = "q" }, &document, &editor_state, allocator)));
+    try testing.expect(!editor_state.invalid_search);
+    try testing.expectEqual(14, document.cursor_x);
+    try testing.expectEqual(0, document.cursor_y);
+    try testing.expect(!(try handleKey(.{ .codepoint = vaxis.Key.enter }, &document, &editor_state, allocator)));
+    try testing.expectEqual(.NORMAL, document.mode);
+    try testing.expect(!editor_state.invalid_search);
+    try testing.expect(!(try handleKey(.{ .codepoint = 'n' }, &document, &editor_state, allocator)));
+    try testing.expectEqual(14, document.cursor_x);
+    try testing.expectEqual(1, document.cursor_y);
+}
+
+test "searching back" {
+    const allocator = testing.allocator;
+    var editor_state = state.State{};
+    var document: editor.Editor = .{};
+    defer document.deinit(allocator);
+    defer editor_state.deinit(allocator);
+
+    try document.appendRow(allocator, "quit zag with wq or q or q!");
+    try document.appendRow(allocator, "quit zag with wq or q or q!");
+    document.cursor_x = 13;
+    document.cursor_y = 1;
+
+    try testing.expect(!(try handleKey(.{ .codepoint = '/' }, &document, &editor_state, allocator)));
+    try testing.expectEqual(.SEARCH, document.mode);
+    try testing.expect(!(try handleKey(.{ .codepoint = 'w', .text = "w" }, &document, &editor_state, allocator)));
+    try testing.expect(!(try handleKey(.{ .codepoint = 'q', .text = "q" }, &document, &editor_state, allocator)));
+    try testing.expect(!editor_state.invalid_search);
+    try testing.expectEqual(14, document.cursor_x);
+    try testing.expectEqual(1, document.cursor_y);
+    try testing.expect(!(try handleKey(.{ .codepoint = vaxis.Key.enter }, &document, &editor_state, allocator)));
+    try testing.expectEqual(.NORMAL, document.mode);
+    try testing.expect(!editor_state.invalid_search);
+    try testing.expect(!(try handleKey(.{ .codepoint = 'N' }, &document, &editor_state, allocator)));
+    try testing.expectEqual(14, document.cursor_x);
+    try testing.expectEqual(0, document.cursor_y);
+}
+
+test "searching between two occurences" {
+    const allocator = testing.allocator;
+    var editor_state = state.State{};
+    var document: editor.Editor = .{};
+    defer document.deinit(allocator);
+    defer editor_state.deinit(allocator);
+
+    try document.appendRow(allocator, "quit zag with wq or q or q!");
+    try document.appendRow(allocator, "something else");
+    try document.appendRow(allocator, "quit zag with wq or q or q!");
+    document.cursor_x = 5;
+    document.cursor_y = 1;
+
+    try testing.expect(!(try handleKey(.{ .codepoint = '/' }, &document, &editor_state, allocator)));
+    try testing.expectEqual(.SEARCH, document.mode);
+    try testing.expect(!(try handleKey(.{ .codepoint = 'w', .text = "w" }, &document, &editor_state, allocator)));
+    try testing.expect(!(try handleKey(.{ .codepoint = 'q', .text = "q" }, &document, &editor_state, allocator)));
+    try testing.expect(!editor_state.invalid_search);
+    try testing.expectEqual(14, document.cursor_x);
+    try testing.expectEqual(2, document.cursor_y);
+    try testing.expect(!(try handleKey(.{ .codepoint = vaxis.Key.enter }, &document, &editor_state, allocator)));
+    try testing.expectEqual(.NORMAL, document.mode);
+    try testing.expect(!editor_state.invalid_search);
+    try testing.expectEqual(14, document.cursor_x);
+    try testing.expectEqual(2, document.cursor_y);
+}
+
+test "searching under cursor" {
+    const allocator = testing.allocator;
+    var editor_state = state.State{};
+    var document: editor.Editor = .{};
+    defer document.deinit(allocator);
+    defer editor_state.deinit(allocator);
+
+    try document.appendRow(allocator, "quit zag with wq or q or q!");
+    try document.appendRow(allocator, "something else");
+    try document.appendRow(allocator, "quit zag with wq or q or q!");
+    document.cursor_x = 14;
+    document.cursor_y = 0;
+
+    try testing.expect(!(try handleKey(.{ .codepoint = '/' }, &document, &editor_state, allocator)));
+    try testing.expectEqual(.SEARCH, document.mode);
+    try testing.expect(!(try handleKey(.{ .codepoint = 'w', .text = "w" }, &document, &editor_state, allocator)));
+    try testing.expect(!(try handleKey(.{ .codepoint = 'q', .text = "q" }, &document, &editor_state, allocator)));
+    try testing.expect(!editor_state.invalid_search);
+    try testing.expectEqual(14, document.cursor_x);
+    try testing.expectEqual(0, document.cursor_y);
+    try testing.expect(!(try handleKey(.{ .codepoint = vaxis.Key.enter }, &document, &editor_state, allocator)));
+    try testing.expectEqual(.NORMAL, document.mode);
+    try testing.expect(!editor_state.invalid_search);
     try testing.expectEqual(14, document.cursor_x);
     try testing.expectEqual(0, document.cursor_y);
 }
