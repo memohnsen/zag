@@ -108,14 +108,26 @@ fn drawStatusBar(
     // Show filename and lines in file
     const file: []const u8 = if (document.filename) |name| name else "[No File]";
     const edits_icon = unsavedEditsIcon(document);
-    const file_text = try std.fmt.bufPrint(file_buf, " {s} | {s}{s} - {d} lines | {s}", .{ @tagName(document.mode), file, edits_icon, document.rows.items.len, @tagName(document.getFileType()) });
+    // this buffer should never be able to overflow since we are trimming the file name down to a max of 150 chars
+    const file_text = std.fmt.bufPrint(file_buf, " {s} | {s}{s} - {d} lines | {s}", .{
+        @tagName(document.mode),
+        file[0..@min(file.len, 150)],
+        edits_icon,
+        document.rows.items.len,
+        @tagName(document.getFileType()),
+    }) catch {
+        unreachable;
+    };
     _ = status_window.printSegment(.{
         .text = file_text,
         .style = .{ .reverse = true },
     }, .{ .wrap = .none });
 
     // Show cursor position
-    const cursor_text = try std.fmt.bufPrint(cursor_buf, "{d}:{d}", .{ document.cursor_y + 1, document.cursor_x + 1 });
+    const cursor_text = try std.fmt.bufPrint(cursor_buf, "{d}:{d}", .{
+        document.cursor_y + 1,
+        document.cursor_x + 1,
+    });
     const text_width: u16 = @intCast(cursor_text.len);
     const text_col = status_window.width -| text_width;
     _ = status_window.printSegment(.{
@@ -148,7 +160,10 @@ fn drawCommandBar(
         .height = 1,
     });
 
-    const file_text = try std.fmt.bufPrint(buf, "{s}", .{editor_state.command_buffer.items});
+    // this buffer should never be able to overflow since we are trimming the command
+    const file_text = std.fmt.bufPrint(buf, "{s}", .{editor_state.command_buffer.items[0..@min(editor_state.command_buffer.items.len, 250)]}) catch {
+        unreachable;
+    };
     _ = status_window.printSegment(.{ .text = file_text }, .{ .wrap = .none });
 }
 

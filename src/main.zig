@@ -15,7 +15,7 @@ const Event = union(enum) {
 
 pub fn main(init: std.process.Init) void {
     run(init) catch |err| {
-        log.err("Zag failed to init: {}", .{err});
+        log.err("Zag failed: {}", .{err});
         std.process.exit(1);
     };
 }
@@ -54,8 +54,16 @@ fn run(init: std.process.Init) !void {
         const event = try event_loop.nextEvent();
         switch (event) {
             .key_press => |key| {
-                const should_quit = try commands.handleKey(key, &document, &editor_state, gpa);
-                try notifs.handleNotifications(&editor_state, &document, gpa, io);
+                // if handle key ever fails it's a keypress error, not worth quitting app for
+                // show the error as a notif to the user and break out of the catch
+                // this yields false then so we stay in the editor
+                const should_quit = commands.handleKey(key, &document, &editor_state, gpa) catch |e| blk: {
+                    editor_state.showNotification(&document, gpa, @errorName(e), io) catch {};
+                    break :blk false;
+                };
+                // do nothing if this fails
+                // a notif failing is acceptable and logging is worthless in raw mode
+                notifs.handleNotifications(&editor_state, &document, gpa, io) catch {};
                 if (should_quit) break;
             },
             .winsize => |size| {
@@ -89,7 +97,10 @@ fn handleArgs(
     if (iter.next()) |filename| {
         const cwd = std.Io.Dir.cwd();
         const file = cwd.openFile(io, filename, .{}) catch |err| {
-            log.err("Failed to load file '{s}': {}", .{ filename, err });
+            log.err("Failed to load file '{s}': {}", .{
+                filename,
+                err,
+            });
             return err;
         };
         defer file.close(io);
