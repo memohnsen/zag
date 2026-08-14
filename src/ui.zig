@@ -6,22 +6,26 @@ const state = @import("editor/state.zig");
 
 const welcome_text = "Zag Editor -- Version 0.1.0";
 
+pub const Buffers = struct {
+    status: [256]u8 = undefined,
+    cursor: [256]u8 = undefined,
+    command: [256]u8 = undefined,
+};
+
 pub fn refresh(
     vx: *vaxis.Vaxis,
     tty: *std.Io.Writer,
     document: *const editor.Editor,
     editor_state: *const state.State,
+    buffers: *Buffers,
 ) !void {
     const window = vx.window();
     window.clear();
     drawRows(window, document, editor_state);
 
-    var status_buf: [256]u8 = undefined;
-    var cursor_buf: [256]u8 = undefined;
-    try drawStatusBar(window, document, status_buf[0..], cursor_buf[0..]);
+    try drawStatusBar(window, document, &buffers.status, &buffers.cursor);
 
-    var command_buf: [256]u8 = undefined;
-    try drawCommandBar(window, editor_state, command_buf[0..]);
+    try drawCommandBar(window, editor_state, &buffers.command);
 
     var screen_x: usize = 0;
     var screen_y: usize = 0;

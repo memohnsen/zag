@@ -50,6 +50,8 @@ fn run(init: std.process.Init) !void {
     var editor_state: state.State = .{};
     defer editor_state.deinit(gpa);
 
+    var ui_buffers: ui.Buffers = .{};
+
     while (true) {
         const event = try event_loop.nextEvent();
         switch (event) {
@@ -75,7 +77,7 @@ fn run(init: std.process.Init) !void {
         const text_height = window.height -| 2;
         document.scroll(text_height, window.width);
         editor_state.hideNotification(&document, io);
-        try ui.refresh(&vx, tty.writer(), &document, &editor_state);
+        try ui.refresh(&vx, tty.writer(), &document, &editor_state, &ui_buffers);
         // subtract 2 lines due to command and status bar
         document.rows_shown = vx.window().height - 2;
     }
@@ -140,4 +142,5 @@ test "all" {
     _ = @import("editor/row.zig");
     _ = @import("editor/state.zig");
     _ = @import("editor/notifications.zig");
+    _ = @import("snapshots/snaps.zig");
 }

@@ -18,7 +18,17 @@ pub fn build(b: *std.Build) void {
     });
     exe_mod.addImport("vaxis", vaxis.module("vaxis"));
 
-    const exe = b.addExecutable(.{ .name = "zag", .root_module = exe_mod });
+    if (b.lazyDependency("ohsnap", .{
+        .target = target,
+        .optimize = optimize,
+    })) |ohsnap_dep| {
+        exe_mod.addImport("ohsnap", ohsnap_dep.module("ohsnap"));
+    }
+
+    const exe = b.addExecutable(.{
+        .name = "zag",
+        .root_module = exe_mod,
+    });
     b.installArtifact(exe);
 
     // Let ZLS type-check the project on save without emitting a binary.
