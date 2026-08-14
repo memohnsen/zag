@@ -2,4 +2,4 @@
 /.zig-cache
 /zig-pkg
 .DS_Store
-test.txt
+test.zig
