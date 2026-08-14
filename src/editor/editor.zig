@@ -2,7 +2,6 @@ const std = @import("std");
 const mem = std.mem;
 const testing = std.testing;
 const Row = @import("row.zig").Row;
-const state = @import("state.zig");
 
 pub const Mode = enum {
     NORMAL,
@@ -11,6 +10,11 @@ pub const Mode = enum {
     COMMAND,
     REPLACE,
     SEARCH,
+};
+
+pub const SaveResult = enum {
+    success,
+    no_filename,
 };
 
 pub const SearchDirection = enum {
@@ -232,13 +236,19 @@ pub const Editor = struct {
         allocator: mem.Allocator,
         io: std.Io,
         dir: std.Io.Dir,
-    ) !void {
+    ) !SaveResult {
         if (self.filename) |filename| {
             const text = try self.toOwnedText(allocator);
             defer allocator.free(text);
 
-            try dir.writeFile(io, .{ .sub_path = filename, .data = text });
+            try dir.writeFile(io, .{
+                .sub_path = filename,
+                .data = text,
+            });
             self.unsaved_edits = false;
+            return .success;
+        } else {
+            return .no_filename;
         }
     }
 
@@ -358,7 +368,11 @@ pub const Editor = struct {
             return .c;
         } else if (mem.eql(u8, extension, ".rs")) {
             return .rust;
-        } else if (mem.eql(u8, extension, ".cpp") or mem.eql(u8, extension, ".cc") or mem.eql(u8, extension, ".cxx") or mem.eql(u8, extension, ".hpp")) {
+        } else if (mem.eql(u8, extension, ".cpp") or
+            mem.eql(u8, extension, ".cc") or
+            mem.eql(u8, extension, ".cxx") or
+            mem.eql(u8, extension, ".hpp"))
+        {
             return .cpp;
         } else if (mem.eql(u8, extension, ".rb")) {
             return .ruby;
@@ -577,7 +591,8 @@ test "saving file with text" {
     try document.appendRow(allocator, "hello");
     try document.appendRow(allocator, "world");
 
-    try document.saveFile(allocator, io, tmp.dir);
+    const result = try document.saveFile(allocator, io, tmp.dir);
+    try testing.expectEqual(.success, result);
 
     const saved = try tmp.dir.readFileAlloc(io, "test.txt", allocator, .limited(1024));
     defer allocator.free(saved);
@@ -600,7 +615,8 @@ test "saving file overwrites old data" {
     document.filename = try allocator.dupe(u8, "test.txt");
     try document.appendRow(allocator, "new contents");
 
-    try document.saveFile(allocator, io, tmp.dir);
+    const result = try document.saveFile(allocator, io, tmp.dir);
+    try testing.expectEqual(.success, result);
 
     const saved = try tmp.dir.readFileAlloc(io, "test.txt", allocator, .limited(1024));
     defer allocator.free(saved);
@@ -624,12 +640,28 @@ test "save file with new file name" {
 
     try document.appendRow(allocator, "new contents");
 
-    try document.saveFile(allocator, io, tmp.dir);
+    const result = try document.saveFile(allocator, io, tmp.dir);
+    try testing.expectEqual(.success, result);
 
     const saved = try tmp.dir.readFileAlloc(io, document.filename.?, allocator, .limited(1024));
     defer allocator.free(saved);
 
     try testing.expectEqualStrings("new contents", saved);
+}
+
+test "saving file fails with no filename" {
+    const allocator = testing.allocator;
+    const io = testing.io;
+    var document = Editor{};
+    defer document.deinit(allocator);
+
+    var tmp = testing.tmpDir(.{});
+    defer tmp.cleanup();
+
+    try document.appendRow(allocator, "new contents");
+
+    const result = try document.saveFile(allocator, io, tmp.dir);
+    try testing.expectEqual(.no_filename, result);
 }
 
 // REPLACING TEXT
@@ -676,37 +708,44 @@ test "changing text shows unsaved_edits true" {
     try document.appendRow(allocator, "hello");
     try document.appendRow(allocator, "world");
 
-    try document.saveFile(allocator, io, tmp.dir);
+    var result = try document.saveFile(allocator, io, tmp.dir);
+    try testing.expectEqual(.success, result);
     try testing.expect(!document.unsaved_edits);
     try document.replaceChar(allocator, "e", document.cursor_x);
     try testing.expect(document.unsaved_edits);
 
-    try document.saveFile(allocator, io, tmp.dir);
+    result = try document.saveFile(allocator, io, tmp.dir);
+    try testing.expectEqual(.success, result);
     try testing.expect(!document.unsaved_edits);
     try document.insertNewLine(allocator);
     try testing.expect(document.unsaved_edits);
 
-    try document.saveFile(allocator, io, tmp.dir);
+    result = try document.saveFile(allocator, io, tmp.dir);
+    try testing.expectEqual(.success, result);
     try testing.expect(!document.unsaved_edits);
     try document.insertRow(allocator, "e", 0);
     try testing.expect(document.unsaved_edits);
 
-    try document.saveFile(allocator, io, tmp.dir);
+    result = try document.saveFile(allocator, io, tmp.dir);
+    try testing.expectEqual(.success, result);
     try testing.expect(!document.unsaved_edits);
     try document.insertText(allocator, "e");
     try testing.expect(document.unsaved_edits);
 
-    try document.saveFile(allocator, io, tmp.dir);
+    result = try document.saveFile(allocator, io, tmp.dir);
+    try testing.expectEqual(.success, result);
     try testing.expect(!document.unsaved_edits);
     try document.removeRow(allocator, 1);
     try testing.expect(document.unsaved_edits);
 
-    try document.saveFile(allocator, io, tmp.dir);
+    result = try document.saveFile(allocator, io, tmp.dir);
+    try testing.expectEqual(.success, result);
     try testing.expect(!document.unsaved_edits);
     try document.joinWithNextRow(allocator);
     try testing.expect(document.unsaved_edits);
 
-    try document.saveFile(allocator, io, tmp.dir);
+    result = try document.saveFile(allocator, io, tmp.dir);
+    try testing.expectEqual(.success, result);
     try testing.expect(!document.unsaved_edits);
     try document.joinWithPrevRow(allocator);
     try testing.expect(document.unsaved_edits);
@@ -717,8 +756,6 @@ test "searching finds the string" {
     const allocator = testing.allocator;
     var document = Editor{};
     defer document.deinit(allocator);
-    var editor_state = state.State{};
-    defer editor_state.deinit(allocator);
 
     try document.appendRow(allocator, "hello there world");
     try document.appendRow(allocator, "this is a new line");
@@ -739,8 +776,6 @@ test "searching forward" {
     const allocator = testing.allocator;
     var document = Editor{};
     defer document.deinit(allocator);
-    var editor_state = state.State{};
-    defer editor_state.deinit(allocator);
 
     try document.appendRow(allocator, "hello there world");
     try document.appendRow(allocator, "hello there world");
@@ -757,8 +792,6 @@ test "searching back" {
     const allocator = testing.allocator;
     var document = Editor{};
     defer document.deinit(allocator);
-    var editor_state = state.State{};
-    defer editor_state.deinit(allocator);
 
     document.cursor_x = 13;
     document.cursor_y = 1;

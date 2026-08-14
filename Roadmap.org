@@ -1,12 +1,4 @@
 * Roadmap for Zag
-** Finish tutorial
-- [ ] Filetype detection from the filename
-- [ ] Displaying the filetype in the status bar
-- [ ] Highlighting the active search match
-- [ ] Rendering nonprintable characters
-- [ ] Tracking row indexes
-- [ ] Propagating multiline-comment state between rows
-
 ** Post tutorial
 - [ ] add ui testing library like cargo insta
 - [ ] scroll buffer

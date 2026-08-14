@@ -13,14 +13,24 @@ pub fn handleNotifications(
     var notif_buf: [512]u8 = undefined;
 
     if (editor_state.save_requested) {
-        try document.saveFile(allocator, io, std.Io.Dir.cwd());
+        const result = document.saveFile(allocator, io, std.Io.Dir.cwd()) catch |e| {
+            const text = try std.fmt.bufPrint(&notif_buf, "Saving failed: {}", .{e});
+            try editor_state.showNotification(document, allocator, text, io);
+            editor_state.save_requested = false;
+            return;
+        };
 
-        if (document.filename) |file| {
-            const text = try std.fmt.bufPrint(&notif_buf, "{s} has been successfully saved.", .{file});
-            try editor_state.showNotification(document, allocator, text, io);
-        } else {
-            const text = try std.fmt.bufPrint(&notif_buf, "Saving failed, no file name found.", .{});
-            try editor_state.showNotification(document, allocator, text, io);
+        switch (result) {
+            .success => {
+                // This is safe to unwrap bc if it got this far a filename must exist
+                const text = try std.fmt.bufPrint(&notif_buf, "{s} has been successfully saved.", .{document.filename.?});
+                try editor_state.showNotification(document, allocator, text, io);
+            },
+            .no_filename => {
+                const text = try std.fmt.bufPrint(&notif_buf, "Saving failed, no file name found.", .{});
+                try editor_state.showNotification(document, allocator, text, io);
+                document.unsaved_edits = true;
+            },
         }
 
         editor_state.save_requested = false;
@@ -71,7 +81,24 @@ test "succesful save message" {
     try testing.expect(editor_state.save_requested == false);
 }
 
-test "failed save message" {
+test "saving failed message" {
+    const allocator = testing.allocator;
+    const io = testing.io;
+    var document = editor.Editor{};
+    defer document.deinit(allocator);
+    var editor_state = state.State{};
+    defer editor_state.deinit(allocator);
+
+    document.filename = try allocator.dupe(u8, "./sample/tst.txt");
+    editor_state.save_requested = true;
+    document.unsaved_edits = true;
+    try handleNotifications(&editor_state, &document, allocator, io);
+    try testing.expect(mem.startsWith(u8, editor_state.command_buffer.items, "Saving failed:"));
+    try testing.expect(editor_state.save_requested == false);
+    try testing.expectEqual(true, document.unsaved_edits);
+}
+
+test "failed save message, no file name" {
     const allocator = testing.allocator;
     const io = testing.io;
     var document = editor.Editor{};

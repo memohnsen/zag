@@ -13,7 +13,10 @@ pub const Row = struct {
     }
 
     pub fn init(allocator: mem.Allocator, input: []const u8) !Row {
-        var row = Row{ .chars = .empty, .render = .empty };
+        var row = Row{
+            .chars = .empty,
+            .render = .empty,
+        };
         errdefer row.deinit(allocator);
 
         try row.insertText(allocator, 0, input);

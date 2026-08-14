@@ -7,7 +7,7 @@
       devShells = nixpkgs.lib.genAttrs systems (system:
         let pkgs = nixpkgs.legacyPackages.${system};
         in { default = pkgs.mkShell {
-          packages = with pkgs; [ zig zls just git ];
+          packages = with pkgs; [ zig zls just ];
           shellHook = ''echo "Nix dev shell: zag"'';
         }; });
     };

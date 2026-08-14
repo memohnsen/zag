@@ -399,7 +399,8 @@ fn commandFromKey(key: vaxis.Key, document: *editor.Editor, pending_g: bool) Com
     if (key.matches('J', .{}) and document.mode == .NORMAL) return .join_next_line;
 
     // DELETION
-    if (key.matches(vaxis.Key.backspace, .{}) and (document.mode == .INSERT or document.mode == .COMMAND or document.mode == .SEARCH)) return .delete_left;
+    if (key.matches(vaxis.Key.backspace, .{}) and
+        (document.mode == .INSERT or document.mode == .COMMAND or document.mode == .SEARCH)) return .delete_left;
     if (key.matches('x', .{}) and document.mode == .NORMAL) return .delete_current;
     if (key.matches('X', .{}) and document.mode == .NORMAL) return .delete_left;
     if (key.matches('d', .{}) and document.mode == .NORMAL) return .delete_line;
@@ -666,11 +667,20 @@ test "ctrl-u jumps half page up" {
 
     document.rows_shown = 10;
     document.cursor_y = 10;
-    try testing.expect(!(try handleKey(.{ .codepoint = 'u', .mods = .{ .ctrl = true } }, &document, &editor_state, allocator)));
+    try testing.expect(!(try handleKey(.{
+        .codepoint = 'u',
+        .mods = .{ .ctrl = true },
+    }, &document, &editor_state, allocator)));
     try testing.expect(document.cursor_y == 5);
-    try testing.expect(!(try handleKey(.{ .codepoint = 'u', .mods = .{ .ctrl = true } }, &document, &editor_state, allocator)));
+    try testing.expect(!(try handleKey(.{
+        .codepoint = 'u',
+        .mods = .{ .ctrl = true },
+    }, &document, &editor_state, allocator)));
     try testing.expect(document.cursor_y == 0);
-    try testing.expect(!(try handleKey(.{ .codepoint = 'u', .mods = .{ .ctrl = true } }, &document, &editor_state, allocator)));
+    try testing.expect(!(try handleKey(.{
+        .codepoint = 'u',
+        .mods = .{ .ctrl = true },
+    }, &document, &editor_state, allocator)));
     try testing.expect(document.cursor_y == 0);
 }
 
@@ -694,11 +704,20 @@ test "ctrl-d jumps half page down" {
     try document.appendRow(allocator, "hello");
 
     document.rows_shown = 10;
-    try testing.expect(!(try handleKey(.{ .codepoint = 'd', .mods = .{ .ctrl = true } }, &document, &editor_state, allocator)));
+    try testing.expect(!(try handleKey(.{
+        .codepoint = 'd',
+        .mods = .{ .ctrl = true },
+    }, &document, &editor_state, allocator)));
     try testing.expectEqual(5, document.cursor_y);
-    try testing.expect(!(try handleKey(.{ .codepoint = 'd', .mods = .{ .ctrl = true } }, &document, &editor_state, allocator)));
+    try testing.expect(!(try handleKey(.{
+        .codepoint = 'd',
+        .mods = .{ .ctrl = true },
+    }, &document, &editor_state, allocator)));
     try testing.expectEqual(10, document.cursor_y);
-    try testing.expect(!(try handleKey(.{ .codepoint = 'd', .mods = .{ .ctrl = true } }, &document, &editor_state, allocator)));
+    try testing.expect(!(try handleKey(.{
+        .codepoint = 'd',
+        .mods = .{ .ctrl = true },
+    }, &document, &editor_state, allocator)));
     try testing.expectEqual(10, document.cursor_y);
 }
 
@@ -778,9 +797,15 @@ test "inserting text with commands" {
     try testing.expect(!(try handleKey(.{ .codepoint = 'i' }, &document, &editor_state, allocator)));
     try testing.expect(document.mode == .INSERT);
     try testing.expect(document.cursor_x == 0);
-    try testing.expect(!(try handleKey(.{ .codepoint = 'b', .text = "b" }, &document, &editor_state, allocator)));
+    try testing.expect(!(try handleKey(.{
+        .codepoint = 'b',
+        .text = "b",
+    }, &document, &editor_state, allocator)));
     try testing.expect(document.cursor_x == 1);
-    try testing.expect(!(try handleKey(.{ .codepoint = 'a', .text = "a" }, &document, &editor_state, allocator)));
+    try testing.expect(!(try handleKey(.{
+        .codepoint = 'a',
+        .text = "a",
+    }, &document, &editor_state, allocator)));
     try testing.expect(document.cursor_x == 2);
     try testing.expectEqualStrings("ba", document.rows.items[document.cursor_y].chars.items);
     try testing.expect(!(try handleKey(.{ .codepoint = vaxis.Key.escape }, &document, &editor_state, allocator)));
@@ -790,7 +815,10 @@ test "inserting text with commands" {
     try testing.expect(!(try handleKey(.{ .codepoint = 'A' }, &document, &editor_state, allocator)));
     try testing.expect(document.mode == .INSERT);
     try testing.expect(document.cursor_x == 2);
-    try testing.expect(!(try handleKey(.{ .codepoint = 'n', .text = "n" }, &document, &editor_state, allocator)));
+    try testing.expect(!(try handleKey(.{
+        .codepoint = 'n',
+        .text = "n",
+    }, &document, &editor_state, allocator)));
     try testing.expectEqualStrings("ban", document.rows.items[document.cursor_y].chars.items);
     try testing.expect(document.cursor_x == 3);
 }
@@ -1134,7 +1162,10 @@ test "save changes editor_state" {
 
     try testing.expect(!(try handleKey(.{ .codepoint = ':' }, &document, &editor_state, allocator)));
     try testing.expect(document.mode == .COMMAND);
-    try testing.expect(!(try handleKey(.{ .codepoint = 'w', .text = "w" }, &document, &editor_state, allocator)));
+    try testing.expect(!(try handleKey(.{
+        .codepoint = 'w',
+        .text = "w",
+    }, &document, &editor_state, allocator)));
     try testing.expect(!(try handleKey(.{ .codepoint = vaxis.Key.enter }, &document, &editor_state, allocator)));
     try testing.expect(editor_state.save_requested == true);
 }
@@ -1153,14 +1184,18 @@ test "saving file with text" {
     try document.appendRow(allocator, "hello");
     try document.appendRow(allocator, "world");
 
-    try document.saveFile(allocator, io, tmp.dir);
+    const result = try document.saveFile(allocator, io, tmp.dir);
+    try testing.expectEqual(.success, result);
 
     const saved = try tmp.dir.readFileAlloc(io, "test.txt", allocator, .limited(1024));
     defer allocator.free(saved);
 
     try testing.expect(!(try handleKey(.{ .codepoint = ':' }, &document, &editor_state, allocator)));
     try testing.expect(document.mode == .COMMAND);
-    try testing.expect(!(try handleKey(.{ .codepoint = 'w', .text = "w" }, &document, &editor_state, allocator)));
+    try testing.expect(!(try handleKey(.{
+        .codepoint = 'w',
+        .text = "w",
+    }, &document, &editor_state, allocator)));
     try testing.expect(!(try handleKey(.{ .codepoint = vaxis.Key.enter }, &document, &editor_state, allocator)));
     try testing.expectEqualStrings("hello\nworld", saved);
     try testing.expect(editor_state.save_requested);
@@ -1207,8 +1242,14 @@ test "adding text in command line" {
 
     try testing.expect(!(try handleKey(.{ .codepoint = ':' }, &document, &editor_state, allocator)));
     try testing.expect(document.mode == .COMMAND);
-    try testing.expect(!(try handleKey(.{ .codepoint = 'w', .text = "w" }, &document, &editor_state, allocator)));
-    try testing.expect(!(try handleKey(.{ .codepoint = 'q', .text = "q" }, &document, &editor_state, allocator)));
+    try testing.expect(!(try handleKey(.{
+        .codepoint = 'w',
+        .text = "w",
+    }, &document, &editor_state, allocator)));
+    try testing.expect(!(try handleKey(.{
+        .codepoint = 'q',
+        .text = "q",
+    }, &document, &editor_state, allocator)));
     try testing.expectEqualStrings(":wq", editor_state.command_buffer.items);
     try testing.expect(editor_state.command_cursor_x == 3);
 
@@ -1225,8 +1266,14 @@ test "deleting text in command line" {
 
     try testing.expect(!(try handleKey(.{ .codepoint = ':' }, &document, &editor_state, allocator)));
     try testing.expect(document.mode == .COMMAND);
-    try testing.expect(!(try handleKey(.{ .codepoint = 'w', .text = "w" }, &document, &editor_state, allocator)));
-    try testing.expect(!(try handleKey(.{ .codepoint = 'q', .text = "q" }, &document, &editor_state, allocator)));
+    try testing.expect(!(try handleKey(.{
+        .codepoint = 'w',
+        .text = "w",
+    }, &document, &editor_state, allocator)));
+    try testing.expect(!(try handleKey(.{
+        .codepoint = 'q',
+        .text = "q",
+    }, &document, &editor_state, allocator)));
     try testing.expectEqualStrings(":wq", editor_state.command_buffer.items);
 
     try testing.expect(!(try handleKey(.{ .codepoint = vaxis.Key.backspace }, &document, &editor_state, allocator)));
@@ -1246,7 +1293,10 @@ test ":q quits with no unsaved edits" {
     try testing.expect(!editor_state.quit_blocked);
     try testing.expect(!(try handleKey(.{ .codepoint = ':' }, &document, &editor_state, allocator)));
     try testing.expect(document.mode == .COMMAND);
-    try testing.expect(!(try handleKey(.{ .codepoint = 'q', .text = "q" }, &document, &editor_state, allocator)));
+    try testing.expect(!(try handleKey(.{
+        .codepoint = 'q',
+        .text = "q",
+    }, &document, &editor_state, allocator)));
     try testing.expect((try handleKey(.{ .codepoint = vaxis.Key.enter }, &document, &editor_state, allocator)));
 }
 
@@ -1260,7 +1310,10 @@ test ":q fails with unsaved edits" {
     document.unsaved_edits = true;
     try testing.expect(!(try handleKey(.{ .codepoint = ':' }, &document, &editor_state, allocator)));
     try testing.expect(document.mode == .COMMAND);
-    try testing.expect(!(try handleKey(.{ .codepoint = 'q', .text = "q" }, &document, &editor_state, allocator)));
+    try testing.expect(!(try handleKey(.{
+        .codepoint = 'q',
+        .text = "q",
+    }, &document, &editor_state, allocator)));
     try testing.expect(!(try handleKey(.{ .codepoint = vaxis.Key.enter }, &document, &editor_state, allocator)));
     try testing.expect(editor_state.quit_blocked);
 }
@@ -1275,8 +1328,14 @@ test ":q! quits with no unsaved edits" {
     try testing.expect(!editor_state.quit_blocked);
     try testing.expect(!(try handleKey(.{ .codepoint = ':' }, &document, &editor_state, allocator)));
     try testing.expect(document.mode == .COMMAND);
-    try testing.expect(!(try handleKey(.{ .codepoint = 'q', .text = "q" }, &document, &editor_state, allocator)));
-    try testing.expect(!(try handleKey(.{ .codepoint = '!', .text = "!" }, &document, &editor_state, allocator)));
+    try testing.expect(!(try handleKey(.{
+        .codepoint = 'q',
+        .text = "q",
+    }, &document, &editor_state, allocator)));
+    try testing.expect(!(try handleKey(.{
+        .codepoint = '!',
+        .text = "!",
+    }, &document, &editor_state, allocator)));
     try testing.expect((try handleKey(.{ .codepoint = vaxis.Key.enter }, &document, &editor_state, allocator)));
     try testing.expect(!editor_state.quit_blocked);
 }
@@ -1291,8 +1350,14 @@ test ":q! quits with unsaved edits" {
     document.unsaved_edits = true;
     try testing.expect(!(try handleKey(.{ .codepoint = ':' }, &document, &editor_state, allocator)));
     try testing.expect(document.mode == .COMMAND);
-    try testing.expect(!(try handleKey(.{ .codepoint = 'q', .text = "q" }, &document, &editor_state, allocator)));
-    try testing.expect(!(try handleKey(.{ .codepoint = '!', .text = "!" }, &document, &editor_state, allocator)));
+    try testing.expect(!(try handleKey(.{
+        .codepoint = 'q',
+        .text = "q",
+    }, &document, &editor_state, allocator)));
+    try testing.expect(!(try handleKey(.{
+        .codepoint = '!',
+        .text = "!",
+    }, &document, &editor_state, allocator)));
     try testing.expect((try handleKey(.{ .codepoint = vaxis.Key.enter }, &document, &editor_state, allocator)));
     try testing.expect(!editor_state.quit_blocked);
 }
@@ -1311,14 +1376,18 @@ test ":w saves" {
     try document.appendRow(allocator, "hello");
     try document.appendRow(allocator, "world");
 
-    try document.saveFile(allocator, io, tmp.dir);
+    const result = try document.saveFile(allocator, io, tmp.dir);
+    try testing.expectEqual(.success, result);
 
     const saved = try tmp.dir.readFileAlloc(io, "test.txt", allocator, .limited(1024));
     defer allocator.free(saved);
 
     try testing.expect(!(try handleKey(.{ .codepoint = ':' }, &document, &editor_state, allocator)));
     try testing.expect(document.mode == .COMMAND);
-    try testing.expect(!(try handleKey(.{ .codepoint = 'w', .text = "w" }, &document, &editor_state, allocator)));
+    try testing.expect(!(try handleKey(.{
+        .codepoint = 'w',
+        .text = "w",
+    }, &document, &editor_state, allocator)));
     try testing.expect(!(try handleKey(.{ .codepoint = vaxis.Key.enter }, &document, &editor_state, allocator)));
     try testing.expectEqualStrings("hello\nworld", saved);
     try testing.expect(editor_state.save_requested == true);
@@ -1338,9 +1407,18 @@ test ":w {filename} saves with a filename" {
 
     try testing.expect(!(try handleKey(.{ .codepoint = ':' }, &document, &editor_state, allocator)));
     try testing.expect(document.mode == .COMMAND);
-    try testing.expect(!(try handleKey(.{ .codepoint = 'w', .text = "w" }, &document, &editor_state, allocator)));
-    try testing.expect(!(try handleKey(.{ .codepoint = ' ', .text = " " }, &document, &editor_state, allocator)));
-    try testing.expect(!(try handleKey(.{ .codepoint = 'a', .text = "a" }, &document, &editor_state, allocator)));
+    try testing.expect(!(try handleKey(.{
+        .codepoint = 'w',
+        .text = "w",
+    }, &document, &editor_state, allocator)));
+    try testing.expect(!(try handleKey(.{
+        .codepoint = ' ',
+        .text = " ",
+    }, &document, &editor_state, allocator)));
+    try testing.expect(!(try handleKey(.{
+        .codepoint = 'a',
+        .text = "a",
+    }, &document, &editor_state, allocator)));
     try testing.expect(!(try handleKey(.{ .codepoint = vaxis.Key.enter }, &document, &editor_state, allocator)));
     try testing.expectEqualStrings("hello", document.rows.items[0].chars.items);
     try testing.expect(editor_state.save_requested == true);
@@ -1360,15 +1438,22 @@ test ":wq saves and quits" {
     try document.appendRow(allocator, "hello");
     try document.appendRow(allocator, "world");
 
-    try document.saveFile(allocator, io, tmp.dir);
+    const result = try document.saveFile(allocator, io, tmp.dir);
+    try testing.expectEqual(.success, result);
 
     const saved = try tmp.dir.readFileAlloc(io, "test.txt", allocator, .limited(1024));
     defer allocator.free(saved);
 
     try testing.expect(!(try handleKey(.{ .codepoint = ':' }, &document, &editor_state, allocator)));
     try testing.expect(document.mode == .COMMAND);
-    try testing.expect(!(try handleKey(.{ .codepoint = 'w', .text = "w" }, &document, &editor_state, allocator)));
-    try testing.expect(!(try handleKey(.{ .codepoint = 'q', .text = "q" }, &document, &editor_state, allocator)));
+    try testing.expect(!(try handleKey(.{
+        .codepoint = 'w',
+        .text = "w",
+    }, &document, &editor_state, allocator)));
+    try testing.expect(!(try handleKey(.{
+        .codepoint = 'q',
+        .text = "q",
+    }, &document, &editor_state, allocator)));
     try testing.expect((try handleKey(.{ .codepoint = vaxis.Key.enter }, &document, &editor_state, allocator)));
     try testing.expectEqualStrings("hello\nworld", saved);
     try testing.expect(editor_state.save_requested == true);
@@ -1396,7 +1481,10 @@ test "enter copies buffer to last search" {
     defer editor_state.deinit(allocator);
 
     try testing.expect(!(try handleKey(.{ .codepoint = '/' }, &document, &editor_state, allocator)));
-    try testing.expect(!(try handleKey(.{ .codepoint = 'o', .text = "o" }, &document, &editor_state, allocator)));
+    try testing.expect(!(try handleKey(.{
+        .codepoint = 'o',
+        .text = "o",
+    }, &document, &editor_state, allocator)));
     try testing.expect(!(try handleKey(.{ .codepoint = vaxis.Key.enter }, &document, &editor_state, allocator)));
     try testing.expectEqualStrings("o", editor_state.last_search.items);
 }
@@ -1415,8 +1503,14 @@ test "escape from search returns cursor to last pos" {
 
     try testing.expect(!(try handleKey(.{ .codepoint = '/' }, &document, &editor_state, allocator)));
     try testing.expectEqual(.SEARCH, document.mode);
-    try testing.expect(!(try handleKey(.{ .codepoint = 'l', .text = "l" }, &document, &editor_state, allocator)));
-    try testing.expect(!(try handleKey(.{ .codepoint = 'o', .text = "o" }, &document, &editor_state, allocator)));
+    try testing.expect(!(try handleKey(.{
+        .codepoint = 'l',
+        .text = "l",
+    }, &document, &editor_state, allocator)));
+    try testing.expect(!(try handleKey(.{
+        .codepoint = 'o',
+        .text = "o",
+    }, &document, &editor_state, allocator)));
     try testing.expectEqual(3, document.cursor_x);
     try testing.expectEqual(0, document.cursor_y);
     try testing.expect(!(try handleKey(.{ .codepoint = vaxis.Key.escape }, &document, &editor_state, allocator)));
@@ -1434,8 +1528,14 @@ test "text handling in search mode" {
 
     try testing.expect(!(try handleKey(.{ .codepoint = '/' }, &document, &editor_state, allocator)));
     try testing.expectEqual(.SEARCH, document.mode);
-    try testing.expect(!(try handleKey(.{ .codepoint = 'w', .text = "w" }, &document, &editor_state, allocator)));
-    try testing.expect(!(try handleKey(.{ .codepoint = 'q', .text = "q" }, &document, &editor_state, allocator)));
+    try testing.expect(!(try handleKey(.{
+        .codepoint = 'w',
+        .text = "w",
+    }, &document, &editor_state, allocator)));
+    try testing.expect(!(try handleKey(.{
+        .codepoint = 'q',
+        .text = "q",
+    }, &document, &editor_state, allocator)));
     try testing.expectEqualStrings("/wq", editor_state.command_buffer.items);
     try testing.expect(!(try handleKey(.{ .codepoint = vaxis.Key.backspace }, &document, &editor_state, allocator)));
     try testing.expectEqualStrings("/w", editor_state.command_buffer.items);
@@ -1453,8 +1553,14 @@ test "searching with /" {
 
     try testing.expect(!(try handleKey(.{ .codepoint = '/' }, &document, &editor_state, allocator)));
     try testing.expectEqual(.SEARCH, document.mode);
-    try testing.expect(!(try handleKey(.{ .codepoint = 'w', .text = "w" }, &document, &editor_state, allocator)));
-    try testing.expect(!(try handleKey(.{ .codepoint = 'q', .text = "q" }, &document, &editor_state, allocator)));
+    try testing.expect(!(try handleKey(.{
+        .codepoint = 'w',
+        .text = "w",
+    }, &document, &editor_state, allocator)));
+    try testing.expect(!(try handleKey(.{
+        .codepoint = 'q',
+        .text = "q",
+    }, &document, &editor_state, allocator)));
     try testing.expect(!editor_state.invalid_search);
     try testing.expectEqual(14, document.cursor_x);
     try testing.expectEqual(0, document.cursor_y);
@@ -1466,7 +1572,10 @@ test "searching with /" {
 
     try testing.expect(!(try handleKey(.{ .codepoint = '/' }, &document, &editor_state, allocator)));
     try testing.expectEqual(.SEARCH, document.mode);
-    try testing.expect(!(try handleKey(.{ .codepoint = 'l', .text = "l" }, &document, &editor_state, allocator)));
+    try testing.expect(!(try handleKey(.{
+        .codepoint = 'l',
+        .text = "l",
+    }, &document, &editor_state, allocator)));
     try testing.expect(!editor_state.invalid_search);
     try testing.expectEqual(14, document.cursor_x);
     try testing.expectEqual(0, document.cursor_y);
@@ -1489,8 +1598,14 @@ test "searching forward" {
 
     try testing.expect(!(try handleKey(.{ .codepoint = '/' }, &document, &editor_state, allocator)));
     try testing.expectEqual(.SEARCH, document.mode);
-    try testing.expect(!(try handleKey(.{ .codepoint = 'w', .text = "w" }, &document, &editor_state, allocator)));
-    try testing.expect(!(try handleKey(.{ .codepoint = 'q', .text = "q" }, &document, &editor_state, allocator)));
+    try testing.expect(!(try handleKey(.{
+        .codepoint = 'w',
+        .text = "w",
+    }, &document, &editor_state, allocator)));
+    try testing.expect(!(try handleKey(.{
+        .codepoint = 'q',
+        .text = "q",
+    }, &document, &editor_state, allocator)));
     try testing.expect(!editor_state.invalid_search);
     try testing.expectEqual(14, document.cursor_x);
     try testing.expectEqual(0, document.cursor_y);
@@ -1516,8 +1631,14 @@ test "searching back" {
 
     try testing.expect(!(try handleKey(.{ .codepoint = '/' }, &document, &editor_state, allocator)));
     try testing.expectEqual(.SEARCH, document.mode);
-    try testing.expect(!(try handleKey(.{ .codepoint = 'w', .text = "w" }, &document, &editor_state, allocator)));
-    try testing.expect(!(try handleKey(.{ .codepoint = 'q', .text = "q" }, &document, &editor_state, allocator)));
+    try testing.expect(!(try handleKey(.{
+        .codepoint = 'w',
+        .text = "w",
+    }, &document, &editor_state, allocator)));
+    try testing.expect(!(try handleKey(.{
+        .codepoint = 'q',
+        .text = "q",
+    }, &document, &editor_state, allocator)));
     try testing.expect(!editor_state.invalid_search);
     try testing.expectEqual(14, document.cursor_x);
     try testing.expectEqual(1, document.cursor_y);
@@ -1544,8 +1665,14 @@ test "searching between two occurences" {
 
     try testing.expect(!(try handleKey(.{ .codepoint = '/' }, &document, &editor_state, allocator)));
     try testing.expectEqual(.SEARCH, document.mode);
-    try testing.expect(!(try handleKey(.{ .codepoint = 'w', .text = "w" }, &document, &editor_state, allocator)));
-    try testing.expect(!(try handleKey(.{ .codepoint = 'q', .text = "q" }, &document, &editor_state, allocator)));
+    try testing.expect(!(try handleKey(.{
+        .codepoint = 'w',
+        .text = "w",
+    }, &document, &editor_state, allocator)));
+    try testing.expect(!(try handleKey(.{
+        .codepoint = 'q',
+        .text = "q",
+    }, &document, &editor_state, allocator)));
     try testing.expect(!editor_state.invalid_search);
     try testing.expectEqual(14, document.cursor_x);
     try testing.expectEqual(2, document.cursor_y);
@@ -1571,8 +1698,14 @@ test "searching under cursor" {
 
     try testing.expect(!(try handleKey(.{ .codepoint = '/' }, &document, &editor_state, allocator)));
     try testing.expectEqual(.SEARCH, document.mode);
-    try testing.expect(!(try handleKey(.{ .codepoint = 'w', .text = "w" }, &document, &editor_state, allocator)));
-    try testing.expect(!(try handleKey(.{ .codepoint = 'q', .text = "q" }, &document, &editor_state, allocator)));
+    try testing.expect(!(try handleKey(.{
+        .codepoint = 'w',
+        .text = "w",
+    }, &document, &editor_state, allocator)));
+    try testing.expect(!(try handleKey(.{
+        .codepoint = 'q',
+        .text = "q",
+    }, &document, &editor_state, allocator)));
     try testing.expect(!editor_state.invalid_search);
     try testing.expectEqual(14, document.cursor_x);
     try testing.expectEqual(0, document.cursor_y);
@@ -1597,7 +1730,10 @@ test "replacing text with r" {
     document.cursor_x = 0;
     try testing.expect(!(try handleKey(.{ .codepoint = 'r' }, &document, &editor_state, allocator)));
     try testing.expect(document.mode == .REPLACE);
-    try testing.expect(!(try handleKey(.{ .codepoint = 'w', .text = "w" }, &document, &editor_state, allocator)));
+    try testing.expect(!(try handleKey(.{
+        .codepoint = 'w',
+        .text = "w",
+    }, &document, &editor_state, allocator)));
     try testing.expect(document.mode == .NORMAL);
     try testing.expectEqualStrings("wello", document.rows.items[0].chars.items);
 
@@ -1605,7 +1741,10 @@ test "replacing text with r" {
     document.cursor_y = 1;
     try testing.expect(!(try handleKey(.{ .codepoint = 'r' }, &document, &editor_state, allocator)));
     try testing.expect(document.mode == .REPLACE);
-    try testing.expect(!(try handleKey(.{ .codepoint = 'w', .text = "w" }, &document, &editor_state, allocator)));
+    try testing.expect(!(try handleKey(.{
+        .codepoint = 'w',
+        .text = "w",
+    }, &document, &editor_state, allocator)));
     try testing.expect(document.mode == .NORMAL);
     try testing.expectEqualStrings("", document.rows.items[1].chars.items);
 }
@@ -1623,13 +1762,31 @@ test "replacing text with R" {
     document.cursor_x = 0;
     try testing.expect(!(try handleKey(.{ .codepoint = 'R' }, &document, &editor_state, allocator)));
     try testing.expect(document.mode == .REPLACE);
-    try testing.expect(!(try handleKey(.{ .codepoint = 'w', .text = "w" }, &document, &editor_state, allocator)));
-    try testing.expect(!(try handleKey(.{ .codepoint = 'o', .text = "o" }, &document, &editor_state, allocator)));
-    try testing.expect(!(try handleKey(.{ .codepoint = 'r', .text = "r" }, &document, &editor_state, allocator)));
-    try testing.expect(!(try handleKey(.{ .codepoint = 'l', .text = "l" }, &document, &editor_state, allocator)));
-    try testing.expect(!(try handleKey(.{ .codepoint = 'd', .text = "d" }, &document, &editor_state, allocator)));
+    try testing.expect(!(try handleKey(.{
+        .codepoint = 'w',
+        .text = "w",
+    }, &document, &editor_state, allocator)));
+    try testing.expect(!(try handleKey(.{
+        .codepoint = 'o',
+        .text = "o",
+    }, &document, &editor_state, allocator)));
+    try testing.expect(!(try handleKey(.{
+        .codepoint = 'r',
+        .text = "r",
+    }, &document, &editor_state, allocator)));
+    try testing.expect(!(try handleKey(.{
+        .codepoint = 'l',
+        .text = "l",
+    }, &document, &editor_state, allocator)));
+    try testing.expect(!(try handleKey(.{
+        .codepoint = 'd',
+        .text = "d",
+    }, &document, &editor_state, allocator)));
     // this should not show in the line since it's greater than the length of the row
-    try testing.expect(!(try handleKey(.{ .codepoint = '.', .text = "." }, &document, &editor_state, allocator)));
+    try testing.expect(!(try handleKey(.{
+        .codepoint = '.',
+        .text = ".",
+    }, &document, &editor_state, allocator)));
     try testing.expect(!(try handleKey(.{ .codepoint = vaxis.Key.escape }, &document, &editor_state, allocator)));
     try testing.expect(document.mode == .NORMAL);
     try testing.expectEqualStrings("world", document.rows.items[0].chars.items);
@@ -1638,7 +1795,10 @@ test "replacing text with R" {
     document.cursor_y = 1;
     try testing.expect(!(try handleKey(.{ .codepoint = 'R' }, &document, &editor_state, allocator)));
     try testing.expect(document.mode == .REPLACE);
-    try testing.expect(!(try handleKey(.{ .codepoint = 'w', .text = "w" }, &document, &editor_state, allocator)));
+    try testing.expect(!(try handleKey(.{
+        .codepoint = 'w',
+        .text = "w",
+    }, &document, &editor_state, allocator)));
     try testing.expect(!(try handleKey(.{ .codepoint = vaxis.Key.escape }, &document, &editor_state, allocator)));
     try testing.expect(document.mode == .NORMAL);
     try testing.expectEqualStrings("", document.rows.items[1].chars.items);
