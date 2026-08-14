@@ -3,3 +3,4 @@
 /zig-pkg
 .DS_Store
 test.zig
+.direnv/
