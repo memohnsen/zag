@@ -60,6 +60,7 @@ pub const State = struct {
 
     pub fn setLastSearch(self: *State, allocator: mem.Allocator) !void {
         self.last_search.clearRetainingCapacity();
+        if (self.command_buffer.items.len < 2) return;
         try self.last_search.appendSlice(allocator, self.command_buffer.items[1..]);
     }
 
@@ -143,4 +144,100 @@ test "notifications hide after 3s" {
     try testing.expect(editor_state.command_cursor_x == 0);
     try testing.expect(document.mode == .NORMAL);
     try testing.expect(editor_state.command_buffer.items.len == 0);
+}
+
+test "notification stays before 3s" {
+    const allocator = testing.allocator;
+    const io = testing.io;
+    var editor_state = State{};
+    defer editor_state.deinit(allocator);
+    var document = editor.Editor{};
+    defer document.deinit(allocator);
+
+    try editor_state.showNotification(&document, allocator, "File saved", io);
+
+    const now = std.Io.Timestamp.now(io, .awake);
+    editor_state.notif_started = now.subDuration(std.Io.Duration.fromSeconds(2));
+    editor_state.hideNotification(&document, io);
+
+    try testing.expectEqualStrings("File saved", editor_state.command_buffer.items);
+    try testing.expect(editor_state.notif_started != null);
+}
+
+test "hide notification does nothing when none is showing" {
+    const allocator = testing.allocator;
+    const io = testing.io;
+    var editor_state = State{};
+    defer editor_state.deinit(allocator);
+    var document = editor.Editor{};
+    defer document.deinit(allocator);
+
+    editor_state.hideNotification(&document, io);
+
+    try testing.expect(editor_state.command_buffer.items.len == 0);
+    try testing.expect(editor_state.notif_started == null);
+}
+
+test "last search is set from command buffer" {
+    var state = State{};
+    const allocator = testing.allocator;
+    defer state.deinit(allocator);
+
+    try state.insertText(allocator, 0, "/hello");
+    try state.setLastSearch(allocator);
+
+    try testing.expectEqualStrings("hello", state.last_search.items);
+}
+
+test "last search is replaced by new search" {
+    var state = State{};
+    const allocator = testing.allocator;
+    defer state.deinit(allocator);
+    var document = editor.Editor{};
+    defer document.deinit(allocator);
+
+    try state.insertText(allocator, 0, "/foo");
+    try state.setLastSearch(allocator);
+    state.clearText(&document);
+
+    try state.insertText(allocator, 0, "/bar");
+    try state.setLastSearch(allocator);
+
+    try testing.expectEqualStrings("bar", state.last_search.items);
+}
+
+test "last search empty with only slash" {
+    var state = State{};
+    const allocator = testing.allocator;
+    defer state.deinit(allocator);
+
+    try state.insertText(allocator, 0, "/");
+    try state.setLastSearch(allocator);
+
+    try testing.expectEqualStrings("", state.last_search.items);
+}
+
+test "last search empty with empty command buffer" {
+    var state = State{};
+    const allocator = testing.allocator;
+    defer state.deinit(allocator);
+
+    try state.setLastSearch(allocator);
+
+    try testing.expectEqualStrings("", state.last_search.items);
+}
+
+test "last search cleared when buffer empties" {
+    var state = State{};
+    const allocator = testing.allocator;
+    defer state.deinit(allocator);
+    var document = editor.Editor{};
+    defer document.deinit(allocator);
+
+    try state.insertText(allocator, 0, "/foo");
+    try state.setLastSearch(allocator);
+    state.clearText(&document);
+    try state.setLastSearch(allocator);
+
+    try testing.expectEqualStrings("", state.last_search.items);
 }

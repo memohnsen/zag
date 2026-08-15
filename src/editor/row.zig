@@ -129,3 +129,27 @@ test "cursor x to render x" {
     try testing.expectEqual(4, row.cursorXtoRenderX(2));
     try testing.expectEqual(5, row.cursorXtoRenderX(3));
 }
+
+test "render stays in sync after byte removal" {
+    var row = Row{};
+    const allocator = testing.allocator;
+    defer row.deinit(allocator);
+
+    try row.insertText(allocator, 0, "a\th");
+    try row.removeByte(1, allocator);
+
+    try testing.expectEqualStrings("ah", row.chars.items);
+    try testing.expectEqualStrings("ah", row.render.items);
+}
+
+test "text inserts into middle of row" {
+    var row = Row{};
+    const allocator = testing.allocator;
+    defer row.deinit(allocator);
+
+    try row.insertText(allocator, 0, "Hello");
+    try row.insertText(allocator, 2, "XX");
+
+    try testing.expectEqualStrings("HeXXllo", row.chars.items);
+    try testing.expectEqualStrings("HeXXllo", row.render.items);
+}

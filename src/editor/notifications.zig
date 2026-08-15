@@ -125,3 +125,31 @@ test "show quit blocked" {
     try testing.expectEqualStrings("Please save your file before quitting or type :q! to force quit", editor_state.command_buffer.items);
     try testing.expect(editor_state.save_requested == false);
 }
+
+test "show invalid command" {
+    const allocator = testing.allocator;
+    const io = testing.io;
+    var document = editor.Editor{};
+    defer document.deinit(allocator);
+    var editor_state = state.State{};
+    defer editor_state.deinit(allocator);
+
+    editor_state.invalid_command = true;
+    try handleNotifications(&editor_state, &document, allocator, io);
+    try testing.expectEqualStrings("Invalid command. Valid commands include: :w, :q, :q!, :wq and, :w [filename]", editor_state.command_buffer.items);
+    try testing.expect(editor_state.invalid_command == false);
+}
+
+test "show no search results" {
+    const allocator = testing.allocator;
+    const io = testing.io;
+    var document = editor.Editor{};
+    defer document.deinit(allocator);
+    var editor_state = state.State{};
+    defer editor_state.deinit(allocator);
+
+    editor_state.invalid_search = true;
+    try handleNotifications(&editor_state, &document, allocator, io);
+    try testing.expectEqualStrings("No search results found.", editor_state.command_buffer.items);
+    try testing.expect(editor_state.invalid_search == false);
+}

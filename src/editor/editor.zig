@@ -806,6 +806,34 @@ test "searching back" {
     try testing.expectEqual(0, document.cursor_y);
 }
 
+test "forward search wraps to earlier match on same row" {
+    const allocator = testing.allocator;
+    var document = Editor{};
+    defer document.deinit(allocator);
+
+    try document.appendRow(allocator, "hello world");
+    document.cursor_x = 6;
+    document.cursor_y = 0;
+
+    try testing.expect(document.search("hello", 0, 6, .forward));
+    try testing.expectEqual(0, document.cursor_x);
+    try testing.expectEqual(0, document.cursor_y);
+}
+
+test "backward search wraps to later match on same row" {
+    const allocator = testing.allocator;
+    var document = Editor{};
+    defer document.deinit(allocator);
+
+    try document.appendRow(allocator, "hello world");
+    document.cursor_x = 0;
+    document.cursor_y = 0;
+
+    try testing.expect(document.search("world", 0, 0, .backward));
+    try testing.expectEqual(6, document.cursor_x);
+    try testing.expectEqual(0, document.cursor_y);
+}
+
 // FILETYPE
 test "test file type" {
     const allocator = testing.allocator;
@@ -872,6 +900,82 @@ test "scrolling changes render x" {
     document.cursor_x = 2;
     document.scroll(20, 20);
     try testing.expectEqual(4, document.render_x);
+}
+
+test "scroll moves row offset down" {
+    const allocator = testing.allocator;
+    var document = Editor{};
+    defer document.deinit(allocator);
+
+    var i: usize = 0;
+    while (i < 5) : (i += 1) {
+        try document.appendRow(allocator, "row");
+    }
+    document.cursor_y = 4;
+    document.cursor_x = 0;
+
+    document.scroll(3, 20);
+    try testing.expectEqual(2, document.row_offset);
+}
+
+test "scroll moves row offset up" {
+    const allocator = testing.allocator;
+    var document = Editor{};
+    defer document.deinit(allocator);
+
+    var i: usize = 0;
+    while (i < 5) : (i += 1) {
+        try document.appendRow(allocator, "row");
+    }
+    document.row_offset = 3;
+    document.cursor_y = 1;
+    document.cursor_x = 0;
+
+    document.scroll(3, 20);
+    try testing.expectEqual(1, document.row_offset);
+}
+
+test "scroll moves col offset right" {
+    const allocator = testing.allocator;
+    var document = Editor{};
+    defer document.deinit(allocator);
+
+    try document.appendRow(allocator, "0123456789");
+    document.cursor_y = 0;
+    document.cursor_x = 9;
+
+    document.scroll(20, 5);
+    try testing.expectEqual(5, document.col_offset);
+}
+
+test "scroll moves col offset left" {
+    const allocator = testing.allocator;
+    var document = Editor{};
+    defer document.deinit(allocator);
+
+    try document.appendRow(allocator, "0123456789");
+    document.col_offset = 5;
+    document.cursor_y = 0;
+    document.cursor_x = 0;
+
+    document.scroll(20, 5);
+    try testing.expectEqual(0, document.col_offset);
+}
+
+test "scroll does nothing with zero screen size" {
+    const allocator = testing.allocator;
+    var document = Editor{};
+    defer document.deinit(allocator);
+
+    try document.appendRow(allocator, "row");
+    document.row_offset = 2;
+    document.col_offset = 3;
+    document.cursor_y = 0;
+    document.cursor_x = 0;
+
+    document.scroll(0, 0);
+    try testing.expectEqual(2, document.row_offset);
+    try testing.expectEqual(3, document.col_offset);
 }
 
 test "get current row" {
