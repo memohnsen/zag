@@ -3,10 +3,10 @@ const log = std.log;
 
 const vaxis = @import("vaxis");
 const ui = @import("ui.zig");
-const editor = @import("editor/editor.zig");
-const commands = @import("commands.zig");
-const state = @import("editor/state.zig");
-const notifs = @import("editor/notifications.zig");
+const editor = @import("core/editor/editor.zig");
+const commands = @import("core/commands/commands.zig");
+const state = @import("core/editor/state.zig");
+const notifs = @import("notifications.zig");
 
 const Event = union(enum) {
     key_press: vaxis.Key,
@@ -136,11 +136,11 @@ fn handleArgs(
 }
 
 test "all" {
-    _ = @import("commands.zig");
-    _ = @import("editor/editor.zig");
+    _ = @import("core/commands/commands.zig");
+    _ = @import("core/editor/editor.zig");
     _ = @import("ui.zig");
-    _ = @import("editor/row.zig");
-    _ = @import("editor/state.zig");
-    _ = @import("editor/notifications.zig");
+    _ = @import("core/editor/row.zig");
+    _ = @import("core/editor/state.zig");
+    _ = @import("notifications.zig");
     _ = @import("snapshots/snaps.zig");
 }

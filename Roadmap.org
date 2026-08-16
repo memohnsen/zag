@@ -5,7 +5,6 @@
 - [ ] base themes
 - [ ] line nums and relative line nums
 - [ ] auto indent
-- [ ] search match highlighting
 - [ ] treesitter for highlighting
 
 ** Far off

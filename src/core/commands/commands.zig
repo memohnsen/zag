@@ -4,8 +4,9 @@ const testing = std.testing;
 
 const vaxis = @import("vaxis");
 
-const editor = @import("editor/editor.zig");
-const state = @import("editor/state.zig");
+const editor = @import("../editor/editor.zig");
+const state = @import("../editor/state.zig");
+const runner = @import("runner.zig");
 
 const Command = enum {
     // NAVIGATION
@@ -217,32 +218,7 @@ pub fn handleKey(
             editor_state.invalid_search = !found;
         },
         .run_command => {
-            if (std.mem.eql(u8, editor_state.command_buffer.items, ":w")) {
-                editor_state.save_requested = true;
-                editor_state.clearText(document);
-            } else if (std.mem.eql(u8, editor_state.command_buffer.items, ":wq")) {
-                editor_state.save_requested = true;
-                return true;
-            } else if (std.mem.startsWith(u8, editor_state.command_buffer.items, ":w ")) {
-                if (editor_state.command_buffer.items.len > 3) {
-                    const args = editor_state.command_buffer.items[3..];
-                    const filename = std.mem.trim(u8, args, " ");
-                    if (filename.len > 0) {
-                        try document.setFilenameAs(allocator, filename);
-                    }
-                }
-
-                editor_state.save_requested = true;
-                editor_state.clearText(document);
-            } else if (std.mem.eql(u8, editor_state.command_buffer.items, ":q") and !document.unsaved_edits) {
-                return true;
-            } else if (std.mem.eql(u8, editor_state.command_buffer.items, ":q!")) {
-                return true;
-            } else if (std.mem.eql(u8, editor_state.command_buffer.items, ":q") and document.unsaved_edits) {
-                editor_state.quit_blocked = true;
-            } else {
-                editor_state.invalid_command = true;
-            }
+            if (try runner.runCommand(editor_state, document, allocator)) return true;
         },
 
         // INSERTING TEXT
@@ -738,6 +714,25 @@ test "M jumps to midscreen" {
     var document: editor.Editor = .{};
     defer document.deinit(allocator);
     defer editor_state.deinit(allocator);
+
+    try document.appendRow(allocator, "first");
+    try document.appendRow(allocator, "first");
+    try document.appendRow(allocator, "first");
+    try document.appendRow(allocator, "first");
+    try document.appendRow(allocator, "first");
+    try document.appendRow(allocator, "first");
+    try document.appendRow(allocator, "first");
+    try document.appendRow(allocator, "first");
+    try document.appendRow(allocator, "first");
+    try document.appendRow(allocator, "first");
+    try document.appendRow(allocator, "first");
+
+    document.row_offset = 4;
+    document.rows_shown = 10;
+
+    try testing.expectEqual(0, document.cursor_y);
+    try testing.expect(!(try handleKey(.{ .codepoint = 'M' }, &document, &editor_state, allocator)));
+    try testing.expectEqual(9, document.cursor_y);
 }
 
 test "backspace moves left in normal mode" {

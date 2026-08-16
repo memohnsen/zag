@@ -1,8 +1,8 @@
 const std = @import("std");
 const mem = std.mem;
 const testing = std.testing;
-const editor = @import("editor.zig");
-const state = @import("state.zig");
+const editor = @import("core/editor/editor.zig");
+const state = @import("core/editor/state.zig");
 
 pub fn handleNotifications(
     editor_state: *state.State,
