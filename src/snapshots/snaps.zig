@@ -384,12 +384,7 @@ test "long file scrolls to keep cursor on screen" {
     const oh = ohsnap.OhSnap(ohsnap.default_pretty_options);
     try oh.snap(@src(),
         \\[]u8
-        \\  "row 8                                                                           
-        \\row 9                                                                           
-        \\row 10                                                                          
-        \\row 11                                                                          
-        \\row 12                                                                          
-        \\row 13                                                                          
+        \\  "row 13                                                                          
         \\row 14                                                                          
         \\row 15                                                                          
         \\row 16                                                                          
@@ -406,6 +401,11 @@ test "long file scrolls to keep cursor on screen" {
         \\row 27                                                                          
         \\row 28                                                                          
         \\row 29                                                                          
+        \\~                                                                               
+        \\~                                                                               
+        \\~                                                                               
+        \\~                                                                               
+        \\~                                                                               
         \\ NORMAL | [No File] - 30 lines | text                                       30:1
         \\                                                                                "
     ).expectEqual(screen.items);

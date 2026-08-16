@@ -234,17 +234,20 @@ pub const Editor = struct {
         if (screen_rows == 0 or screen_cols == 0) return;
 
         // vertical
-        if (self.cursor_y < self.row_offset) {
-            self.row_offset = self.cursor_y;
-        } else if (self.cursor_y - self.row_offset >= screen_rows) {
-            self.row_offset = self.cursor_y - screen_rows + 1;
+        const v_margin = @min(5, (self.rows.items.len -| 1) / 2);
+
+        if (self.cursor_y < self.row_offset + v_margin) {
+            self.row_offset = self.cursor_y -| v_margin;
+        } else if (self.cursor_y >= self.row_offset + screen_rows - v_margin) {
+            self.row_offset = self.cursor_y + 1 + v_margin - screen_rows;
         }
 
         // horizontal
-        if (self.render_x < self.col_offset) {
-            self.col_offset = self.render_x;
-        } else if (self.render_x - self.col_offset >= screen_cols) {
-            self.col_offset = self.render_x - screen_cols + 1;
+        const h_margin = @min(5, screen_cols -| 1 / 2);
+        if (self.render_x < self.col_offset + h_margin) {
+            self.col_offset = self.render_x -| h_margin;
+        } else if (self.render_x >= self.col_offset + screen_cols - h_margin) {
+            self.col_offset = self.render_x +| h_margin +| 1 -| screen_cols;
         }
     }
 
@@ -1439,14 +1442,14 @@ test "scroll moves row offset down" {
     defer document.deinit(allocator);
 
     var i: usize = 0;
-    while (i < 5) : (i += 1) {
+    while (i < 12) : (i += 1) {
         try document.appendRow(allocator, "row");
     }
-    document.cursor_y = 4;
+    document.cursor_y = 11;
     document.cursor_x = 0;
 
-    document.scroll(3, 20);
-    try testing.expectEqual(2, document.row_offset);
+    document.scroll(12, 20);
+    try testing.expectEqual(5, document.row_offset);
 }
 
 test "scroll moves row offset up" {
@@ -1455,15 +1458,15 @@ test "scroll moves row offset up" {
     defer document.deinit(allocator);
 
     var i: usize = 0;
-    while (i < 5) : (i += 1) {
+    while (i < 12) : (i += 1) {
         try document.appendRow(allocator, "row");
     }
-    document.row_offset = 3;
-    document.cursor_y = 1;
+    document.row_offset = 11;
+    document.cursor_y = 7;
     document.cursor_x = 0;
 
-    document.scroll(3, 20);
-    try testing.expectEqual(1, document.row_offset);
+    document.scroll(12, 20);
+    try testing.expectEqual(2, document.row_offset);
 }
 
 test "scroll moves col offset right" {
@@ -1471,12 +1474,12 @@ test "scroll moves col offset right" {
     var document = Editor{};
     defer document.deinit(allocator);
 
-    try document.appendRow(allocator, "0123456789");
+    try document.appendRow(allocator, "0123456789012345678901234567890123456789");
     document.cursor_y = 0;
-    document.cursor_x = 9;
+    document.cursor_x = 20;
 
-    document.scroll(20, 5);
-    try testing.expectEqual(5, document.col_offset);
+    document.scroll(20, 20);
+    try testing.expectEqual(6, document.col_offset);
 }
 
 test "scroll moves col offset left" {
