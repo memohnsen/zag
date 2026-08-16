@@ -1,6 +1,5 @@
 * Roadmap for Zag
 ** Post tutorial
-- [ ] basic config file
 - [ ] base themes
 - [ ] line nums and relative line nums
 - [ ] auto indent

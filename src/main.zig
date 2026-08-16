@@ -7,6 +7,7 @@ const editor = @import("core/editor/editor.zig");
 const commands = @import("core/commands/commands.zig");
 const state = @import("core/editor/state.zig");
 const notifs = @import("notifications.zig");
+const config = @import("core/config.zig");
 
 const Event = union(enum) {
     key_press: vaxis.Key,
@@ -24,7 +25,14 @@ fn run(init: std.process.Init) !void {
     const io = init.io;
     const gpa = init.gpa;
 
-    var document = editor.Editor{};
+    var editor_settings = config.Config{};
+    const home_dir = init.environ_map.get("HOME") orelse {
+        return error.HomeNotFound;
+    };
+    try editor_settings.writeConfig(gpa, io, home_dir);
+    try editor_settings.readConfig(gpa, io, home_dir);
+
+    var document = editor.Editor{ .config = editor_settings };
     defer document.deinit(gpa);
 
     // Get args and skip the first
@@ -143,4 +151,5 @@ test "all" {
     _ = @import("core/editor/state.zig");
     _ = @import("notifications.zig");
     _ = @import("snapshots/snaps.zig");
+    _ = @import("core/config.zig");
 }

@@ -2,6 +2,7 @@ const std = @import("std");
 const mem = std.mem;
 const testing = std.testing;
 const Row = @import("row.zig").Row;
+const Config = @import("../config.zig").Config;
 
 pub const Mode = enum {
     NORMAL,
@@ -83,6 +84,7 @@ pub const Editor = struct {
     // NOTE: this is a poor way to do it, change it once we add an undo history later
     // ideally we compare against a snapshot of the file
     unsaved_edits: bool = false,
+    config: Config = .{},
 
     pub fn deinit(self: *Editor, allocator: mem.Allocator) void {
         for (self.rows.items) |*row| {
@@ -234,7 +236,7 @@ pub const Editor = struct {
         if (screen_rows == 0 or screen_cols == 0) return;
 
         // vertical
-        const v_margin = @min(5, (self.rows.items.len -| 1) / 2);
+        const v_margin = @min(self.config.scroll_buffer, (self.rows.items.len -| 1) / 2);
 
         if (self.cursor_y < self.row_offset + v_margin) {
             self.row_offset = self.cursor_y -| v_margin;
@@ -243,7 +245,7 @@ pub const Editor = struct {
         }
 
         // horizontal
-        const h_margin = @min(5, screen_cols -| 1 / 2);
+        const h_margin = @min(self.config.scroll_buffer, screen_cols -| 1 / 2);
         if (self.render_x < self.col_offset + h_margin) {
             self.col_offset = self.render_x -| h_margin;
         } else if (self.render_x >= self.col_offset + screen_cols - h_margin) {
