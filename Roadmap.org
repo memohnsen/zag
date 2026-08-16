@@ -1,5 +1,6 @@
 * Roadmap for Zag
 ** Post tutorial
+- [ ] add ui testing library like cargo insta
 - [ ] scroll buffer
 - [ ] basic config file
 - [ ] base themes

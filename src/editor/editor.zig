@@ -35,6 +35,32 @@ pub const FileType = enum {
     typescript,
 };
 
+pub const CharType = enum {
+    word,
+    punctuation,
+    blank,
+};
+
+pub const MoveDistance = enum {
+    // go to next space
+    full,
+    // go to next change in CharType
+    partial,
+};
+
+pub const MoveType = enum {
+    start,
+    end,
+};
+
+pub fn charToType(ch: u8) CharType {
+    return switch (ch) {
+        'a'...'z', 'A'...'Z', '0'...'9', '_' => .word,
+        ' ', '\t' => .blank,
+        else => .punctuation,
+    };
+}
+
 pub const Editor = struct {
     // the total rows of the file
     rows: std.ArrayList(Row) = .empty,
@@ -387,6 +413,84 @@ pub const Editor = struct {
         } else {
             return .text;
         }
+    }
+
+    // First we skip the blank behind us if it exists
+    // then move to the last char of previous word
+    // then walk to the start of the matching CharType if .partial jump
+    // or walk to last char before blank if .full
+    pub fn moveBack(self: *Editor, distance: MoveDistance) void {
+        if (self.rows.items.len == 0) return;
+        if (self.cursor_x == 0) return;
+
+        // Safe to unwrap here due to above checks
+        const chars = self.currentRow().?.chars.items;
+        var index = self.cursor_x;
+
+        while (index > 0 and charToType(chars[index - 1]) == .blank) : (index -= 1) {}
+        if (index > 0) index -= 1;
+
+        switch (distance) {
+            .full => {
+                while (index > 0 and charToType(chars[index - 1]) != .blank) : (index -= 1) {}
+            },
+            .partial => {
+                while (index > 0 and charToType(chars[index - 1]) == charToType(chars[index])) : (index -= 1) {}
+            },
+        }
+        self.cursor_x = index;
+    }
+    pub fn moveForward(self: *Editor, distance: MoveDistance, move_type: MoveType) void {
+        if (self.rows.items.len == 0) return;
+        if (self.cursor_x == self.rows.items[self.cursor_y].chars.items.len) return;
+
+        // Safe to unwrap here due to above checks
+        const chars = self.currentRow().?.chars.items;
+        var index = self.cursor_x;
+
+        switch (distance) {
+            .full => {
+                switch (move_type) {
+                    // walk through chars while not blank
+                    // add one once we find a blank
+                    // then add once more to hit the first char of the next word
+                    .start => {
+                        while (index < chars.len - 1 and charToType(chars[index + 1]) != .blank) : (index += 1) {}
+                        while (index < chars.len - 1 and charToType(chars[index + 1]) == .blank) : (index += 1) {}
+                        if (index < chars.len - 1) index += 1;
+                    },
+                    // if its blank move forward
+                    // then another to get to first char
+                    // and keep going til end of line
+                    .end => {
+                        while (index < chars.len - 1 and charToType(chars[index + 1]) == .blank) : (index += 1) {}
+                        if (index < chars.len - 1) index += 1;
+                        while (index < chars.len - 1 and charToType(chars[index + 1]) != .blank) : (index += 1) {}
+                    },
+                }
+            },
+            .partial => {
+                switch (move_type) {
+                    // walk through all similar category chars
+                    // add one once we find a blank
+                    // then one more to get to first char
+                    .start => {
+                        while (index < chars.len - 1 and charToType(chars[index + 1]) == charToType(chars[index])) : (index += 1) {}
+                        while (index < chars.len - 1 and charToType(chars[index + 1]) == .blank) : (index += 1) {}
+                        if (index < chars.len - 1) index += 1;
+                    },
+                    // if its blank move forward
+                    // then another to get to first char
+                    // and keep going til we find a diff CharType
+                    .end => {
+                        while (index < chars.len - 1 and charToType(chars[index + 1]) == .blank) : (index += 1) {}
+                        if (index < chars.len - 1) index += 1;
+                        while (index < chars.len - 1 and charToType(chars[index + 1]) == charToType(chars[index])) : (index += 1) {}
+                    },
+                }
+            },
+        }
+        self.cursor_x = index;
     }
 };
 
@@ -875,6 +979,334 @@ test "test file type" {
     try testing.expectEqual(.typescript, document.getFileType());
     try document.setFilenameAs(allocator, "hello.odin");
     try testing.expectEqual(.odin, document.getFileType());
+}
+
+// MOVING TEXT
+test "move back to last word" {
+    const allocator = testing.allocator;
+    var document = Editor{};
+    defer document.deinit(allocator);
+
+    try document.appendRow(allocator, "hello world foo.bar");
+
+    document.moveBack(.partial);
+    try testing.expectEqual(0, document.cursor_x);
+
+    document.cursor_x = 4;
+    document.moveBack(.partial);
+    try testing.expectEqual(0, document.cursor_x);
+
+    document.cursor_x = 5;
+    document.moveBack(.partial);
+    try testing.expectEqual(0, document.cursor_x);
+
+    document.cursor_x = 8;
+    document.moveBack(.partial);
+    try testing.expectEqual(6, document.cursor_x);
+
+    document.cursor_x = 16;
+    document.moveBack(.partial);
+    try testing.expectEqual(15, document.cursor_x);
+
+    document.cursor_x = 15;
+    document.moveBack(.partial);
+    try testing.expectEqual(12, document.cursor_x);
+}
+
+test "move back to last space" {
+    const allocator = testing.allocator;
+    var document = Editor{};
+    defer document.deinit(allocator);
+
+    try document.appendRow(allocator, "hello world foo.bar");
+
+    document.moveBack(.full);
+    try testing.expectEqual(0, document.cursor_x);
+
+    document.cursor_x = 4;
+    document.moveBack(.full);
+    try testing.expectEqual(0, document.cursor_x);
+
+    document.cursor_x = 5;
+    document.moveBack(.full);
+    try testing.expectEqual(0, document.cursor_x);
+
+    document.cursor_x = 8;
+    document.moveBack(.full);
+    try testing.expectEqual(6, document.cursor_x);
+
+    document.cursor_x = 16;
+    document.moveBack(.full);
+    try testing.expectEqual(12, document.cursor_x);
+
+    document.cursor_x = 15;
+    document.moveBack(.full);
+    try testing.expectEqual(12, document.cursor_x);
+}
+
+test "move forward to next word end" {
+    const allocator = testing.allocator;
+    var document = Editor{};
+    defer document.deinit(allocator);
+
+    try document.appendRow(allocator, "hello world foo.bar");
+
+    document.moveForward(.partial, .end);
+    try testing.expectEqual(4, document.cursor_x);
+
+    document.moveForward(.partial, .end);
+    try testing.expectEqual(10, document.cursor_x);
+
+    document.moveForward(.partial, .end);
+    try testing.expectEqual(14, document.cursor_x);
+
+    document.moveForward(.partial, .end);
+    try testing.expectEqual(15, document.cursor_x);
+
+    document.moveForward(.partial, .end);
+    try testing.expectEqual(18, document.cursor_x);
+
+    document.moveForward(.partial, .end);
+    try testing.expectEqual(18, document.cursor_x);
+}
+
+test "move forward to next space end" {
+    const allocator = testing.allocator;
+    var document = Editor{};
+    defer document.deinit(allocator);
+
+    try document.appendRow(allocator, "hello world foo.bar");
+
+    document.moveForward(.full, .end);
+    try testing.expectEqual(4, document.cursor_x);
+
+    document.moveForward(.full, .end);
+    try testing.expectEqual(10, document.cursor_x);
+
+    document.moveForward(.full, .end);
+    try testing.expectEqual(18, document.cursor_x);
+
+    document.moveForward(.full, .end);
+    try testing.expectEqual(18, document.cursor_x);
+}
+
+test "move forward to next word start" {
+    const allocator = testing.allocator;
+    var document = Editor{};
+    defer document.deinit(allocator);
+
+    try document.appendRow(allocator, "hello world foo.bar");
+
+    document.moveForward(.partial, .start);
+    try testing.expectEqual(6, document.cursor_x);
+
+    document.moveForward(.partial, .start);
+    try testing.expectEqual(12, document.cursor_x);
+
+    document.moveForward(.partial, .start);
+    try testing.expectEqual(15, document.cursor_x);
+
+    document.moveForward(.partial, .start);
+    try testing.expectEqual(16, document.cursor_x);
+
+    document.moveForward(.partial, .start);
+    try testing.expectEqual(18, document.cursor_x);
+
+    document.moveForward(.partial, .start);
+    try testing.expectEqual(18, document.cursor_x);
+}
+
+test "move forward to next space start" {
+    const allocator = testing.allocator;
+    var document = Editor{};
+    defer document.deinit(allocator);
+
+    try document.appendRow(allocator, "hello foo.bar world");
+
+    document.moveForward(.full, .start);
+    try testing.expectEqual(6, document.cursor_x);
+
+    document.moveForward(.full, .start);
+    try testing.expectEqual(14, document.cursor_x);
+
+    document.moveForward(.full, .start);
+    try testing.expectEqual(18, document.cursor_x);
+
+    document.moveForward(.full, .start);
+    try testing.expectEqual(18, document.cursor_x);
+}
+
+test "moves starting on blank chars" {
+    const allocator = testing.allocator;
+    var document = Editor{};
+    defer document.deinit(allocator);
+
+    try document.appendRow(allocator, "a  b");
+
+    document.cursor_x = 1;
+    document.moveForward(.partial, .start);
+    try testing.expectEqual(3, document.cursor_x);
+
+    document.cursor_x = 1;
+    document.moveForward(.partial, .end);
+    try testing.expectEqual(3, document.cursor_x);
+
+    document.cursor_x = 1;
+    document.moveForward(.full, .start);
+    try testing.expectEqual(3, document.cursor_x);
+
+    document.cursor_x = 1;
+    document.moveForward(.full, .end);
+    try testing.expectEqual(3, document.cursor_x);
+
+    document.cursor_x = 3;
+    document.moveBack(.partial);
+    try testing.expectEqual(0, document.cursor_x);
+
+    document.cursor_x = 2;
+    document.moveBack(.partial);
+    try testing.expectEqual(0, document.cursor_x);
+
+    document.cursor_x = 1;
+    document.moveBack(.partial);
+    try testing.expectEqual(0, document.cursor_x);
+}
+
+test "moves treat tab as blank" {
+    const allocator = testing.allocator;
+    var document = Editor{};
+    defer document.deinit(allocator);
+
+    try document.appendRow(allocator, "a\tb");
+
+    document.cursor_x = 1;
+    document.moveForward(.partial, .start);
+    try testing.expectEqual(2, document.cursor_x);
+
+    document.cursor_x = 0;
+    document.moveForward(.partial, .end);
+    try testing.expectEqual(2, document.cursor_x);
+
+    document.cursor_x = 2;
+    document.moveBack(.partial);
+    try testing.expectEqual(0, document.cursor_x);
+}
+
+test "underscore counts as word char" {
+    const allocator = testing.allocator;
+    var document = Editor{};
+    defer document.deinit(allocator);
+
+    try document.appendRow(allocator, "foo_bar baz");
+
+    document.moveForward(.partial, .end);
+    try testing.expectEqual(6, document.cursor_x);
+
+    document.moveForward(.partial, .start);
+    try testing.expectEqual(8, document.cursor_x);
+
+    document.moveBack(.partial);
+    try testing.expectEqual(0, document.cursor_x);
+
+    document.cursor_x = 0;
+    document.moveForward(.full, .end);
+    try testing.expectEqual(6, document.cursor_x);
+}
+
+test "moves on all blank row stay on line" {
+    const allocator = testing.allocator;
+    var document = Editor{};
+    defer document.deinit(allocator);
+
+    try document.appendRow(allocator, "   ");
+
+    document.moveForward(.partial, .start);
+    try testing.expectEqual(2, document.cursor_x);
+
+    document.cursor_x = 0;
+    document.moveForward(.partial, .end);
+    try testing.expectEqual(2, document.cursor_x);
+
+    document.cursor_x = 2;
+    document.moveBack(.partial);
+    try testing.expectEqual(0, document.cursor_x);
+}
+
+test "moves on row of only punctuation" {
+    const allocator = testing.allocator;
+    var document = Editor{};
+    defer document.deinit(allocator);
+
+    try document.appendRow(allocator, "...");
+
+    document.cursor_x = 2;
+    document.moveBack(.partial);
+    try testing.expectEqual(0, document.cursor_x);
+
+    document.cursor_x = 0;
+    document.moveForward(.partial, .end);
+    try testing.expectEqual(2, document.cursor_x);
+}
+
+test "moves from leading blanks" {
+    const allocator = testing.allocator;
+    var document = Editor{};
+    defer document.deinit(allocator);
+
+    try document.appendRow(allocator, "  foo");
+
+    document.moveForward(.partial, .start);
+    try testing.expectEqual(2, document.cursor_x);
+
+    document.cursor_x = 0;
+    document.moveForward(.partial, .end);
+    try testing.expectEqual(4, document.cursor_x);
+
+    document.cursor_x = 4;
+    document.moveBack(.partial);
+    try testing.expectEqual(2, document.cursor_x);
+
+    document.cursor_x = 2;
+    document.moveBack(.partial);
+    try testing.expectEqual(0, document.cursor_x);
+}
+
+test "moves do nothing on empty row" {
+    const allocator = testing.allocator;
+    var document = Editor{};
+    defer document.deinit(allocator);
+
+    try document.appendRow(allocator, "");
+
+    document.moveBack(.partial);
+    try testing.expectEqual(0, document.cursor_x);
+
+    document.moveForward(.partial, .start);
+    try testing.expectEqual(0, document.cursor_x);
+
+    document.moveForward(.partial, .end);
+    try testing.expectEqual(0, document.cursor_x);
+
+    document.moveForward(.full, .start);
+    try testing.expectEqual(0, document.cursor_x);
+}
+
+test "moves do nothing on empty file" {
+    const allocator = testing.allocator;
+    var document = Editor{};
+    defer document.deinit(allocator);
+
+    document.moveBack(.partial);
+    try testing.expectEqual(0, document.cursor_x);
+
+    document.moveBack(.full);
+    try testing.expectEqual(0, document.cursor_x);
+
+    document.moveForward(.partial, .start);
+    try testing.expectEqual(0, document.cursor_x);
+
+    document.moveForward(.full, .end);
+    try testing.expectEqual(0, document.cursor_x);
 }
 
 // OTHER

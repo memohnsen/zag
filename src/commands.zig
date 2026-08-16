@@ -146,13 +146,24 @@ pub fn handleKey(
         .page_up => {
             document.cursor_y = document.cursor_y -| document.rows_shown / 2;
         },
-        // TODO: get pos of chars to do this
-        .next_word_start => {},
-        .next_word_end => {},
-        .last_word_start => {},
-        .next_space_start => {},
-        .next_space_end => {},
-        .last_space_start => {},
+        .next_word_start => {
+            document.moveForward(.partial, .start);
+        },
+        .next_word_end => {
+            document.moveForward(.partial, .end);
+        },
+        .last_word_start => {
+            document.moveBack(.partial);
+        },
+        .next_space_start => {
+            document.moveForward(.full, .start);
+        },
+        .next_space_end => {
+            document.moveForward(.full, .end);
+        },
+        .last_space_start => {
+            document.moveBack(.full);
+        },
 
         // MODES
         .normal => {
@@ -740,6 +751,275 @@ test "backspace moves left in normal mode" {
 
     try testing.expect(!(try handleKey(.{ .codepoint = vaxis.Key.backspace }, &document, &editor_state, allocator)));
     try testing.expect(document.cursor_x == 1);
+}
+
+test "move back to last word" {
+    const allocator = testing.allocator;
+    var document: editor.Editor = .{};
+    defer document.deinit(allocator);
+    var editor_state: state.State = .{};
+
+    try document.appendRow(allocator, "hello world foo.bar");
+
+    try testing.expect(!(try handleKey(.{ .codepoint = 'b' }, &document, &editor_state, allocator)));
+    try testing.expectEqual(0, document.cursor_x);
+
+    document.cursor_x = 4;
+    try testing.expect(!(try handleKey(.{ .codepoint = 'b' }, &document, &editor_state, allocator)));
+    try testing.expectEqual(0, document.cursor_x);
+
+    document.cursor_x = 5;
+    try testing.expect(!(try handleKey(.{ .codepoint = 'b' }, &document, &editor_state, allocator)));
+    try testing.expectEqual(0, document.cursor_x);
+
+    document.cursor_x = 8;
+    try testing.expect(!(try handleKey(.{ .codepoint = 'b' }, &document, &editor_state, allocator)));
+    try testing.expectEqual(6, document.cursor_x);
+
+    document.cursor_x = 16;
+    try testing.expect(!(try handleKey(.{ .codepoint = 'b' }, &document, &editor_state, allocator)));
+    try testing.expectEqual(15, document.cursor_x);
+
+    document.cursor_x = 15;
+    try testing.expect(!(try handleKey(.{ .codepoint = 'b' }, &document, &editor_state, allocator)));
+    try testing.expectEqual(12, document.cursor_x);
+}
+
+test "move back to last space" {
+    const allocator = testing.allocator;
+    var document: editor.Editor = .{};
+    defer document.deinit(allocator);
+    var editor_state: state.State = .{};
+
+    try document.appendRow(allocator, "hello world foo.bar");
+
+    try testing.expect(!(try handleKey(.{ .codepoint = 'B' }, &document, &editor_state, allocator)));
+    try testing.expectEqual(0, document.cursor_x);
+
+    document.cursor_x = 4;
+    try testing.expect(!(try handleKey(.{ .codepoint = 'B' }, &document, &editor_state, allocator)));
+    try testing.expectEqual(0, document.cursor_x);
+
+    document.cursor_x = 5;
+    try testing.expect(!(try handleKey(.{ .codepoint = 'B' }, &document, &editor_state, allocator)));
+    try testing.expectEqual(0, document.cursor_x);
+
+    document.cursor_x = 8;
+    try testing.expect(!(try handleKey(.{ .codepoint = 'B' }, &document, &editor_state, allocator)));
+    try testing.expectEqual(6, document.cursor_x);
+
+    document.cursor_x = 16;
+    try testing.expect(!(try handleKey(.{ .codepoint = 'B' }, &document, &editor_state, allocator)));
+    try testing.expectEqual(12, document.cursor_x);
+
+    document.cursor_x = 15;
+    try testing.expect(!(try handleKey(.{ .codepoint = 'B' }, &document, &editor_state, allocator)));
+    try testing.expectEqual(12, document.cursor_x);
+}
+
+test "move forward to next word end" {
+    const allocator = testing.allocator;
+    var document: editor.Editor = .{};
+    defer document.deinit(allocator);
+    var editor_state: state.State = .{};
+
+    try document.appendRow(allocator, "hello world foo.bar");
+
+    try testing.expect(!(try handleKey(.{ .codepoint = 'e' }, &document, &editor_state, allocator)));
+    try testing.expectEqual(4, document.cursor_x);
+
+    try testing.expect(!(try handleKey(.{ .codepoint = 'e' }, &document, &editor_state, allocator)));
+    try testing.expectEqual(10, document.cursor_x);
+
+    try testing.expect(!(try handleKey(.{ .codepoint = 'e' }, &document, &editor_state, allocator)));
+    try testing.expectEqual(14, document.cursor_x);
+
+    try testing.expect(!(try handleKey(.{ .codepoint = 'e' }, &document, &editor_state, allocator)));
+    try testing.expectEqual(15, document.cursor_x);
+
+    try testing.expect(!(try handleKey(.{ .codepoint = 'e' }, &document, &editor_state, allocator)));
+    try testing.expectEqual(18, document.cursor_x);
+
+    try testing.expect(!(try handleKey(.{ .codepoint = 'e' }, &document, &editor_state, allocator)));
+    try testing.expectEqual(18, document.cursor_x);
+}
+
+test "move forward to next space end" {
+    const allocator = testing.allocator;
+    var document: editor.Editor = .{};
+    defer document.deinit(allocator);
+    var editor_state: state.State = .{};
+
+    try document.appendRow(allocator, "hello world foo.bar");
+
+    try testing.expect(!(try handleKey(.{ .codepoint = 'E' }, &document, &editor_state, allocator)));
+    try testing.expectEqual(4, document.cursor_x);
+
+    try testing.expect(!(try handleKey(.{ .codepoint = 'E' }, &document, &editor_state, allocator)));
+    try testing.expectEqual(10, document.cursor_x);
+
+    try testing.expect(!(try handleKey(.{ .codepoint = 'E' }, &document, &editor_state, allocator)));
+    try testing.expectEqual(18, document.cursor_x);
+
+    try testing.expect(!(try handleKey(.{ .codepoint = 'E' }, &document, &editor_state, allocator)));
+    try testing.expectEqual(18, document.cursor_x);
+}
+
+test "move forward to next word start" {
+    const allocator = testing.allocator;
+    var document: editor.Editor = .{};
+    defer document.deinit(allocator);
+    var editor_state: state.State = .{};
+
+    try document.appendRow(allocator, "hello world foo.bar");
+
+    try testing.expect(!(try handleKey(.{ .codepoint = 'w' }, &document, &editor_state, allocator)));
+    try testing.expectEqual(6, document.cursor_x);
+
+    try testing.expect(!(try handleKey(.{ .codepoint = 'w' }, &document, &editor_state, allocator)));
+    try testing.expectEqual(12, document.cursor_x);
+
+    try testing.expect(!(try handleKey(.{ .codepoint = 'w' }, &document, &editor_state, allocator)));
+    try testing.expectEqual(15, document.cursor_x);
+
+    try testing.expect(!(try handleKey(.{ .codepoint = 'w' }, &document, &editor_state, allocator)));
+    try testing.expectEqual(16, document.cursor_x);
+
+    try testing.expect(!(try handleKey(.{ .codepoint = 'w' }, &document, &editor_state, allocator)));
+    try testing.expectEqual(18, document.cursor_x);
+
+    try testing.expect(!(try handleKey(.{ .codepoint = 'w' }, &document, &editor_state, allocator)));
+    try testing.expectEqual(18, document.cursor_x);
+}
+
+test "move forward to next space start" {
+    const allocator = testing.allocator;
+    var document: editor.Editor = .{};
+    defer document.deinit(allocator);
+    var editor_state: state.State = .{};
+
+    try document.appendRow(allocator, "hello foo.bar world");
+
+    try testing.expect(!(try handleKey(.{ .codepoint = 'W' }, &document, &editor_state, allocator)));
+    try testing.expectEqual(6, document.cursor_x);
+
+    try testing.expect(!(try handleKey(.{ .codepoint = 'W' }, &document, &editor_state, allocator)));
+    try testing.expectEqual(14, document.cursor_x);
+
+    try testing.expect(!(try handleKey(.{ .codepoint = 'W' }, &document, &editor_state, allocator)));
+    try testing.expectEqual(18, document.cursor_x);
+
+    try testing.expect(!(try handleKey(.{ .codepoint = 'W' }, &document, &editor_state, allocator)));
+    try testing.expectEqual(18, document.cursor_x);
+}
+
+test "word motions starting on blank chars" {
+    const allocator = testing.allocator;
+    var document: editor.Editor = .{};
+    defer document.deinit(allocator);
+    var editor_state: state.State = .{};
+
+    try document.appendRow(allocator, "a  b");
+
+    document.cursor_x = 1;
+    try testing.expect(!(try handleKey(.{ .codepoint = 'w' }, &document, &editor_state, allocator)));
+    try testing.expectEqual(3, document.cursor_x);
+
+    document.cursor_x = 1;
+    try testing.expect(!(try handleKey(.{ .codepoint = 'e' }, &document, &editor_state, allocator)));
+    try testing.expectEqual(3, document.cursor_x);
+
+    document.cursor_x = 1;
+    try testing.expect(!(try handleKey(.{ .codepoint = 'W' }, &document, &editor_state, allocator)));
+    try testing.expectEqual(3, document.cursor_x);
+
+    document.cursor_x = 1;
+    try testing.expect(!(try handleKey(.{ .codepoint = 'E' }, &document, &editor_state, allocator)));
+    try testing.expectEqual(3, document.cursor_x);
+
+    document.cursor_x = 3;
+    try testing.expect(!(try handleKey(.{ .codepoint = 'b' }, &document, &editor_state, allocator)));
+    try testing.expectEqual(0, document.cursor_x);
+
+    document.cursor_x = 2;
+    try testing.expect(!(try handleKey(.{ .codepoint = 'b' }, &document, &editor_state, allocator)));
+    try testing.expectEqual(0, document.cursor_x);
+
+    document.cursor_x = 1;
+    try testing.expect(!(try handleKey(.{ .codepoint = 'b' }, &document, &editor_state, allocator)));
+    try testing.expectEqual(0, document.cursor_x);
+}
+
+test "word motions treat tab as blank" {
+    const allocator = testing.allocator;
+    var document: editor.Editor = .{};
+    defer document.deinit(allocator);
+    var editor_state: state.State = .{};
+
+    try document.appendRow(allocator, "a\tb");
+
+    document.cursor_x = 1;
+    try testing.expect(!(try handleKey(.{ .codepoint = 'w' }, &document, &editor_state, allocator)));
+    try testing.expectEqual(2, document.cursor_x);
+
+    document.cursor_x = 0;
+    try testing.expect(!(try handleKey(.{ .codepoint = 'e' }, &document, &editor_state, allocator)));
+    try testing.expectEqual(2, document.cursor_x);
+
+    document.cursor_x = 2;
+    try testing.expect(!(try handleKey(.{ .codepoint = 'b' }, &document, &editor_state, allocator)));
+    try testing.expectEqual(0, document.cursor_x);
+}
+
+test "word motions on all blank row stay on line" {
+    const allocator = testing.allocator;
+    var document: editor.Editor = .{};
+    defer document.deinit(allocator);
+    var editor_state: state.State = .{};
+
+    try document.appendRow(allocator, "   ");
+
+    try testing.expect(!(try handleKey(.{ .codepoint = 'w' }, &document, &editor_state, allocator)));
+    try testing.expectEqual(2, document.cursor_x);
+
+    document.cursor_x = 0;
+    try testing.expect(!(try handleKey(.{ .codepoint = 'e' }, &document, &editor_state, allocator)));
+    try testing.expectEqual(2, document.cursor_x);
+
+    document.cursor_x = 2;
+    try testing.expect(!(try handleKey(.{ .codepoint = 'b' }, &document, &editor_state, allocator)));
+    try testing.expectEqual(0, document.cursor_x);
+}
+
+test "word motions do nothing on empty row" {
+    const allocator = testing.allocator;
+    var document: editor.Editor = .{};
+    defer document.deinit(allocator);
+    var editor_state: state.State = .{};
+
+    try document.appendRow(allocator, "");
+
+    try testing.expect(!(try handleKey(.{ .codepoint = 'w' }, &document, &editor_state, allocator)));
+    try testing.expectEqual(0, document.cursor_x);
+
+    try testing.expect(!(try handleKey(.{ .codepoint = 'e' }, &document, &editor_state, allocator)));
+    try testing.expectEqual(0, document.cursor_x);
+
+    try testing.expect(!(try handleKey(.{ .codepoint = 'b' }, &document, &editor_state, allocator)));
+    try testing.expectEqual(0, document.cursor_x);
+}
+
+test "word motions do nothing on empty file" {
+    const allocator = testing.allocator;
+    var document: editor.Editor = .{};
+    defer document.deinit(allocator);
+    var editor_state: state.State = .{};
+
+    try testing.expect(!(try handleKey(.{ .codepoint = 'w' }, &document, &editor_state, allocator)));
+    try testing.expectEqual(0, document.cursor_x);
+
+    try testing.expect(!(try handleKey(.{ .codepoint = 'b' }, &document, &editor_state, allocator)));
+    try testing.expectEqual(0, document.cursor_x);
 }
 
 // INSERTING TEXT
