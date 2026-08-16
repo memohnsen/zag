@@ -22,9 +22,7 @@ pub fn refresh(
     const window = vx.window();
     window.clear();
     drawRows(window, document, editor_state);
-
     try drawStatusBar(window, document, &buffers.status, &buffers.cursor);
-
     try drawCommandBar(window, editor_state, &buffers.command);
 
     var screen_x: usize = 0;

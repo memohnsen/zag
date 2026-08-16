@@ -6,13 +6,6 @@ The goal of Zag is to become an opinionated text editor with a fair amount of to
 
 Zag comes with most of the vim motions for manipulating and editing text.
 
-** Commands
-- type ":" to enter command mode from normal mode
-- :w to save a file
-- :q to quit Zag
-- :q! to force quit
-- :wq to save the file and quit Zag
-
 ** Available keybindings
 
 *** All modes
@@ -40,6 +33,8 @@ Zag comes with most of the vim motions for manipulating and editing text.
  - <E> move forward until next space to the last char
  - <}> move to next blank line
  - <{> move to previous blank line
+ - <s> replace current char under cursor and enter insert mode
+ - <S> clear current line and enter insert mode
 
 **** Text Insertion
  - <a> to enter insert mode to the right of the cursor
@@ -60,9 +55,21 @@ Zag comes with most of the vim motions for manipulating and editing text.
 **** Modes
  - <r> / <R> to enter replace mode
  - <v> / <V> to enter visual mode ( does nothing currently )
+***** Search
  - </> to enter search mode
  - <n> after pressing enter on a search query to go to next occurence
  - <N> after pressing enter on a search query to go to previous occurence
+***** Command
+ - <:> to enter command mode from normal mode
+ - <:w> to save a file
+ - <:q> to quit Zag
+ - <:q!> to force quit
+ - <:wq> to save the file and quit Zag
+
+** Configuration
+Zag's configuration lives in your HOME/.config/zag/config.toml. This file is automatically written on opening the program if it doesn't already exist.
+
+Go to the [[./config.toml][config.toml]] file at the repo root to see what configuration options exist
 
 ** Working with Zag
 Zag is written using the latest stable release of Zig (0.16)

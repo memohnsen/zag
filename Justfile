@@ -6,7 +6,7 @@ nix:
 run:
     zig build run -- ./test.zig
 
-# Run the editor opening the welcome screen
+# Run the editor opening no file which will open the welcome screen
 welcome:
     zig build run
 
