@@ -28,6 +28,8 @@ const Command = enum {
     next_space_start,
     next_space_end,
     last_space_start,
+    next_empty_row,
+    prev_empty_row,
 
     // INSERTION
     insert_left,
@@ -164,6 +166,12 @@ pub fn handleKey(
         },
         .last_space_start => {
             document.moveBack(.full);
+        },
+        .next_empty_row => {
+            document.jumpByParagraph(.forward);
+        },
+        .prev_empty_row => {
+            document.jumpByParagraph(.backward);
         },
 
         // MODES
@@ -356,14 +364,14 @@ fn commandFromKey(key: vaxis.Key, document: *editor.Editor, pending_g: bool) Com
     if (key.matches('M', .{}) and document.mode == .NORMAL) return .middle;
     if (key.matches('d', .{ .ctrl = true }) and document.mode == .NORMAL) return .page_down;
     if (key.matches('u', .{ .ctrl = true }) and document.mode == .NORMAL) return .page_up;
-    // TODO: ----------------
     if (key.matches('w', .{}) and document.mode == .NORMAL) return .next_word_start;
     if (key.matches('W', .{}) and document.mode == .NORMAL) return .next_space_start;
     if (key.matches('e', .{}) and document.mode == .NORMAL) return .next_word_end;
     if (key.matches('E', .{}) and document.mode == .NORMAL) return .next_space_end;
     if (key.matches('b', .{}) and document.mode == .NORMAL) return .last_word_start;
     if (key.matches('B', .{}) and document.mode == .NORMAL) return .last_space_start;
-    // ----------------------
+    if (key.matches('}', .{}) and document.mode == .NORMAL) return .next_empty_row;
+    if (key.matches('{', .{}) and document.mode == .NORMAL) return .prev_empty_row;
     if (key.matches(vaxis.Key.backspace, .{}) and document.mode == .NORMAL) return .left;
     if (key.matches(vaxis.Key.enter, .{}) and document.mode == .NORMAL) return .down;
 
@@ -1015,6 +1023,79 @@ test "word motions do nothing on empty file" {
 
     try testing.expect(!(try handleKey(.{ .codepoint = 'b' }, &document, &editor_state, allocator)));
     try testing.expectEqual(0, document.cursor_x);
+}
+
+test "jump to next paragraph (blank line)" {
+    const allocator = testing.allocator;
+    var document: editor.Editor = .{};
+    defer document.deinit(allocator);
+    var editor_state: state.State = .{};
+
+    try document.appendRow(allocator, "hello");
+    try document.appendRow(allocator, "");
+    try document.appendRow(allocator, "world");
+    try document.appendRow(allocator, "how's it going");
+    try document.appendRow(allocator, "");
+
+    try testing.expect(!(try handleKey(.{ .codepoint = '}' }, &document, &editor_state, allocator)));
+    try testing.expectEqual(1, document.cursor_y);
+
+    try testing.expect(!(try handleKey(.{ .codepoint = '}' }, &document, &editor_state, allocator)));
+    try testing.expectEqual(4, document.cursor_y);
+
+    try testing.expect(!(try handleKey(.{ .codepoint = '}' }, &document, &editor_state, allocator)));
+    try testing.expectEqual(4, document.cursor_y);
+}
+
+test "jump to prev paragraph (blank line)" {
+    const allocator = testing.allocator;
+    var document: editor.Editor = .{};
+    defer document.deinit(allocator);
+    var editor_state: state.State = .{};
+
+    try document.appendRow(allocator, "hello");
+    try document.appendRow(allocator, "");
+    try document.appendRow(allocator, "world");
+    try document.appendRow(allocator, "how's it going");
+    try document.appendRow(allocator, "");
+    document.cursor_y = 4;
+
+    try testing.expect(!(try handleKey(.{ .codepoint = '{' }, &document, &editor_state, allocator)));
+    try testing.expectEqual(1, document.cursor_y);
+
+    try testing.expect(!(try handleKey(.{ .codepoint = '{' }, &document, &editor_state, allocator)));
+    try testing.expectEqual(0, document.cursor_y);
+
+    try testing.expect(!(try handleKey(.{ .codepoint = '{' }, &document, &editor_state, allocator)));
+    try testing.expectEqual(0, document.cursor_y);
+}
+
+test "jump to paragraph does nothing on empty row" {
+    const allocator = testing.allocator;
+    var document = editor.Editor{};
+    defer document.deinit(allocator);
+    var editor_state: state.State = .{};
+
+    try document.appendRow(allocator, "");
+
+    try testing.expect(!(try handleKey(.{ .codepoint = '}' }, &document, &editor_state, allocator)));
+    try testing.expectEqual(0, document.cursor_y);
+
+    try testing.expect(!(try handleKey(.{ .codepoint = '{' }, &document, &editor_state, allocator)));
+    try testing.expectEqual(0, document.cursor_y);
+}
+
+test "jump to paragraph does nothing on empty file" {
+    const allocator = testing.allocator;
+    var document = editor.Editor{};
+    defer document.deinit(allocator);
+    var editor_state: state.State = .{};
+
+    try testing.expect(!(try handleKey(.{ .codepoint = '}' }, &document, &editor_state, allocator)));
+    try testing.expectEqual(0, document.cursor_y);
+
+    try testing.expect(!(try handleKey(.{ .codepoint = '{' }, &document, &editor_state, allocator)));
+    try testing.expectEqual(0, document.cursor_y);
 }
 
 // INSERTING TEXT

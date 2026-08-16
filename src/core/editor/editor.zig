@@ -41,6 +41,14 @@ pub const CharType = enum {
     blank,
 };
 
+pub fn charToType(ch: u8) CharType {
+    return switch (ch) {
+        'a'...'z', 'A'...'Z', '0'...'9', '_' => .word,
+        ' ', '\t' => .blank,
+        else => .punctuation,
+    };
+}
+
 pub const MoveDistance = enum {
     // go to next space
     full,
@@ -53,13 +61,10 @@ pub const MoveType = enum {
     end,
 };
 
-pub fn charToType(ch: u8) CharType {
-    return switch (ch) {
-        'a'...'z', 'A'...'Z', '0'...'9', '_' => .word,
-        ' ', '\t' => .blank,
-        else => .punctuation,
-    };
-}
+pub const MoveDirection = enum {
+    forward,
+    backward,
+};
 
 pub const Editor = struct {
     // the total rows of the file
@@ -440,6 +445,7 @@ pub const Editor = struct {
         }
         self.cursor_x = index;
     }
+
     pub fn moveForward(self: *Editor, distance: MoveDistance, move_type: MoveType) void {
         if (self.rows.items.len == 0) return;
         if (self.cursor_x == self.rows.items[self.cursor_y].chars.items.len) return;
@@ -491,6 +497,30 @@ pub const Editor = struct {
             },
         }
         self.cursor_x = index;
+    }
+
+    // get current row, switch on direction
+    // always add one in either direction to move off blank row to start
+    // forward - keep adding one to cursor_y until row is empty
+    // backward - keep subtracting one to cursor_y until row is empty
+    pub fn jumpByParagraph(self: *Editor, direction: MoveDirection) void {
+        if (self.rows.items.len == 0) return;
+
+        var index = self.cursor_y;
+        const length = self.rows.items.len;
+
+        switch (direction) {
+            .forward => {
+                if (index < length - 1 and self.rows.items[index].chars.items.len == 0) index += 1;
+                while (index < length - 1 and self.rows.items[index].chars.items.len != 0) : (index += 1) {}
+            },
+            .backward => {
+                if (index > 0 and self.rows.items[index].chars.items.len == 0) index -= 1;
+                while (index > 0 and self.rows.items[index].chars.items.len != 0) : (index -= 1) {}
+            },
+        }
+
+        self.cursor_y = index;
     }
 };
 
@@ -1307,6 +1337,75 @@ test "moves do nothing on empty file" {
 
     document.moveForward(.full, .end);
     try testing.expectEqual(0, document.cursor_x);
+}
+
+test "jump to next paragraph (blank line)" {
+    const allocator = testing.allocator;
+    var document = Editor{};
+    defer document.deinit(allocator);
+
+    try document.appendRow(allocator, "hello");
+    try document.appendRow(allocator, "");
+    try document.appendRow(allocator, "world");
+    try document.appendRow(allocator, "how's it going");
+    try document.appendRow(allocator, "");
+
+    document.jumpByParagraph(.forward);
+    try testing.expectEqual(1, document.cursor_y);
+
+    document.jumpByParagraph(.forward);
+    try testing.expectEqual(4, document.cursor_y);
+
+    document.jumpByParagraph(.forward);
+    try testing.expectEqual(4, document.cursor_y);
+}
+
+test "jump to prev paragraph (blank line)" {
+    const allocator = testing.allocator;
+    var document = Editor{};
+    defer document.deinit(allocator);
+
+    try document.appendRow(allocator, "hello");
+    try document.appendRow(allocator, "");
+    try document.appendRow(allocator, "world");
+    try document.appendRow(allocator, "how's it going");
+    try document.appendRow(allocator, "");
+    document.cursor_y = 4;
+
+    document.jumpByParagraph(.backward);
+    try testing.expectEqual(1, document.cursor_y);
+
+    document.jumpByParagraph(.backward);
+    try testing.expectEqual(0, document.cursor_y);
+
+    document.jumpByParagraph(.backward);
+    try testing.expectEqual(0, document.cursor_y);
+}
+
+test "jump to paragraph does nothing on empty row" {
+    const allocator = testing.allocator;
+    var document = Editor{};
+    defer document.deinit(allocator);
+
+    try document.appendRow(allocator, "");
+
+    document.jumpByParagraph(.forward);
+    try testing.expectEqual(0, document.cursor_y);
+
+    document.jumpByParagraph(.backward);
+    try testing.expectEqual(0, document.cursor_y);
+}
+
+test "jump to paragraph does nothing on empty file" {
+    const allocator = testing.allocator;
+    var document = Editor{};
+    defer document.deinit(allocator);
+
+    document.jumpByParagraph(.forward);
+    try testing.expectEqual(0, document.cursor_y);
+
+    document.jumpByParagraph(.backward);
+    try testing.expectEqual(0, document.cursor_y);
 }
 
 // OTHER

@@ -6,6 +6,8 @@
 - [ ] line nums and relative line nums
 - [ ] auto indent
 - [ ] treesitter for highlighting
+- [ ] undo redo
+- [ ] motions with a count prefix
 
 ** Far off
 - [ ] file tab line
