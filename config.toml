@@ -1,5 +1,5 @@
 [editor]
-# how many lines between the cursor and the edge of the editor before scorlling begins
-# the default 5 means once your cursor gets to 5 lines before the top or bottom of the screen scrolling will begin
-# this means your cursor would not reach the top/bottom of the screen until you reach the start/end of the file
+# how many lines between the cursor and the edge of the editor before scrolling begins
 scroll_buffer = 5
+# relative or normal
+line_numbers = "relative"

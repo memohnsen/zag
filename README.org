@@ -1,6 +1,6 @@
-* Zag - A terminal text editor written in zig
+* Zag - A terminal text editor written in Zig
 
-Zag is a terminal text editor written in zig that started by following the Kilo tutorial in C by [[https://viewsourcecode.org/snaptoken/kilo/index.html][Snaptoken]] and grew from there.
+Zag is a terminal text editor written in Zig that started by following the Kilo tutorial in C by [[https://viewsourcecode.org/snaptoken/kilo/index.html][Snaptoken]] and grew from there.
 
 The goal of Zag is to become an opinionated text editor with a fair amount of tools included and an extension system that allows for easy reuse of neovim plugins. Pretty far off from that now, but a boy can dream.
 

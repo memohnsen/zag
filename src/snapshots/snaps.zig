@@ -87,7 +87,7 @@ test "base welcome screen" {
         \\~                                                                               
         \\~                                                                               
         \\~                                                                               
-        \\~                         Zag Editor -- Version 0.1.0                           
+        \\   ~                        Zag Editor -- Version 0.1.0                         
         \\~                                                                               
         \\~                                                                               
         \\~                                                                               
@@ -139,7 +139,7 @@ test "welcome screen in insert mode with text" {
     try oh.snap(
         @src(),
         \\[]u8
-        \\  "typing                                                                          
+        \\  " 1 typing                                                                       
         \\~                                                                               
         \\~                                                                               
         \\~                                                                               
@@ -201,10 +201,10 @@ test "file screen with rows and filename" {
     const oh = ohsnap.OhSnap(ohsnap.default_pretty_options);
     try oh.snap(@src(),
         \\[]u8
-        \\  "const a = 1;                                                                    
-        \\const b = 2;                                                                    
-        \\pub fn main() void {                                                            
-        \\}                                                                               
+        \\  " 2 const a = 1;                                                                 
+        \\ 1 const b = 2;                                                                 
+        \\ 3 pub fn main() void {                                                         
+        \\ 1 }                                                                            
         \\~                                                                               
         \\~                                                                               
         \\~                                                                               
@@ -259,7 +259,7 @@ test "command mode shows buffer in command bar" {
     const oh = ohsnap.OhSnap(ohsnap.default_pretty_options);
     try oh.snap(@src(),
         \\[]u8
-        \\  "hello world                                                                     
+        \\  " 1 hello world                                                                  
         \\~                                                                               
         \\~                                                                               
         \\~                                                                               
@@ -320,8 +320,8 @@ test "search mode shows query and cursor on match" {
     const oh = ohsnap.OhSnap(ohsnap.default_pretty_options);
     try oh.snap(@src(),
         \\[]u8
-        \\  "hello world                                                                     
-        \\hello again                                                                     
+        \\  " 1 hello world                                                                  
+        \\ 2 hello again                                                                  
         \\~                                                                               
         \\~                                                                               
         \\~                                                                               
@@ -384,23 +384,23 @@ test "long file scrolls to keep cursor on screen" {
     const oh = ohsnap.OhSnap(ohsnap.default_pretty_options);
     try oh.snap(@src(),
         \\[]u8
-        \\  "row 13                                                                          
-        \\row 14                                                                          
-        \\row 15                                                                          
-        \\row 16                                                                          
-        \\row 17                                                                          
-        \\row 18                                                                          
-        \\row 19                                                                          
-        \\row 20                                                                          
-        \\row 21                                                                          
-        \\row 22                                                                          
-        \\row 23                                                                          
-        \\row 24                                                                          
-        \\row 25                                                                          
-        \\row 26                                                                          
-        \\row 27                                                                          
-        \\row 28                                                                          
-        \\row 29                                                                          
+        \\  " 16 row 13                                                                      
+        \\ 15 row 14                                                                      
+        \\ 14 row 15                                                                      
+        \\ 13 row 16                                                                      
+        \\ 12 row 17                                                                      
+        \\ 11 row 18                                                                      
+        \\ 10 row 19                                                                      
+        \\ 9  row 20                                                                      
+        \\ 8  row 21                                                                      
+        \\ 7  row 22                                                                      
+        \\ 6  row 23                                                                      
+        \\ 5  row 24                                                                      
+        \\ 4  row 25                                                                      
+        \\ 3  row 26                                                                      
+        \\ 2  row 27                                                                      
+        \\ 1  row 28                                                                      
+        \\ 30 row 29                                                                      
         \\~                                                                               
         \\~                                                                               
         \\~                                                                               

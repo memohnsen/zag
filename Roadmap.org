@@ -1,7 +1,6 @@
 * Roadmap for Zag
 ** Post tutorial
 - [ ] base themes
-- [ ] line nums and relative line nums
 - [ ] auto indent
 - [ ] treesitter for highlighting
 - [ ] undo redo

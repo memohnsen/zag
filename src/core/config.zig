@@ -51,6 +51,10 @@ pub const Config = struct {
             if (mem.startsWith(u8, trimmed, "scroll_buffer = ")) {
                 const val = std.fmt.parseInt(u16, line[16..], 10) catch 5;
                 self.scroll_buffer = val;
+                continue;
+            } else if (mem.startsWith(u8, trimmed, "line_numbers = ")) {
+                self.line_numbers = std.meta.stringToEnum(LineNumbers, trimmed) orelse .relative;
+                continue;
             }
         }
     }
