@@ -19,7 +19,9 @@ const Command = enum {
     first_char,
     line_start,
     line_end,
+    top,
     middle,
+    bottom,
     page_down,
     page_up,
     next_word_start,
@@ -138,8 +140,14 @@ pub fn handleKey(
             }
             editor_state.pending_g = false;
         },
+        .top => {
+            document.cursor_y = document.row_offset;
+        },
         .middle => {
             document.cursor_y = document.row_offset + document.rows_shown / 2;
+        },
+        .bottom => {
+            document.cursor_y = document.row_offset + document.rows_shown - 1;
         },
         .page_down => {
             if (document.cursor_y + document.rows_shown / 2 > document.rows.items.len) {
@@ -388,7 +396,9 @@ fn commandFromKey(key: vaxis.Key, document: *editor.Editor, pending_g: bool) Com
     if (key.matches('$', .{}) and document.mode == .NORMAL) return .line_end;
     if (key.matches('l', .{}) and document.mode == .NORMAL and pending_g) return .line_end;
     if (key.matches('g', .{}) and document.mode == .NORMAL) return .doc_start_gg;
+    if (key.matches('H', .{}) and document.mode == .NORMAL) return .top;
     if (key.matches('M', .{}) and document.mode == .NORMAL) return .middle;
+    if (key.matches('L', .{}) and document.mode == .NORMAL) return .bottom;
     if (key.matches('d', .{ .ctrl = true }) and document.mode == .NORMAL) return .page_down;
     if (key.matches('u', .{ .ctrl = true }) and document.mode == .NORMAL) return .page_up;
     if (key.matches('w', .{}) and document.mode == .NORMAL) return .next_word_start;

@@ -22,7 +22,9 @@ Zag comes with most of the vim motions for manipulating and editing text.
  - <0> to move to start of the row
  - <gg> to move to first row
  - <G> to move to last row
+ - <H> to move to top line of screen
  - <M> to move to middle line of screen
+ - <L> to move to bottom line of screen
  - <Ctrl-d> to go down half the screen
  - <Ctrl-u> to go up half the screen
  - <b> move back one word to the first char
