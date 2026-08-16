@@ -42,6 +42,8 @@ const Command = enum {
 
     // MANIPULATION
     join_next_line,
+    substitute_char,
+    substitute_line,
 
     // DELETION
     delete_left,
@@ -262,8 +264,33 @@ pub fn handleKey(
             document.cursor_x = 0;
             document.mode = .INSERT;
         },
+
+        // MANIPULATING TEXT
         .join_next_line => {
             try document.joinWithNextRow(allocator);
+        },
+        .substitute_char => {
+            document.mode = .INSERT;
+
+            if (document.currentRow()) |row| {
+                if (document.cursor_x != 0) {
+                    try row.removeByte(document.cursor_x - 1, allocator);
+                    document.cursor_x -= 1;
+                } else {
+                    if (row.chars.items.len != 0) {
+                        try row.removeByte(document.cursor_x, allocator);
+                    }
+                }
+            }
+        },
+        .substitute_line => {
+            if (document.currentRow()) |row| {
+                row.chars.clearRetainingCapacity();
+                try row.updateRender(allocator);
+                document.mode = .INSERT;
+            } else {
+                document.mode = .INSERT;
+            }
         },
 
         // DELETING TEXT
@@ -392,6 +419,8 @@ fn commandFromKey(key: vaxis.Key, document: *editor.Editor, pending_g: bool) Com
 
     // MANIPULATION
     if (key.matches('J', .{}) and document.mode == .NORMAL) return .join_next_line;
+    if (key.matches('s', .{}) and document.mode == .NORMAL) return .substitute_char;
+    if (key.matches('S', .{}) and document.mode == .NORMAL) return .substitute_line;
 
     // DELETION
     if (key.matches(vaxis.Key.backspace, .{}) and
@@ -1337,6 +1366,7 @@ test "joining row with prev row does nothing at top of file" {
     try testing.expectEqualStrings("hello", document.rows.items[0].chars.items);
 }
 
+// MANIPULATING TEXT
 test "join row with next row" {
     const allocator = testing.allocator;
     var document: editor.Editor = .{};
@@ -1368,6 +1398,162 @@ test "join row with next row does nothing at end of file" {
     try testing.expect(!(try handleKey(.{ .codepoint = 'J' }, &document, &editor_state, allocator)));
     try testing.expect(document.rows.items.len == 2);
     try testing.expectEqualStrings(" world", document.rows.items[1].chars.items);
+}
+
+test "substituting char at cursor x 0" {
+    const allocator = testing.allocator;
+    var document: editor.Editor = .{};
+    defer document.deinit(allocator);
+    var editor_state: state.State = .{};
+
+    try document.appendRow(allocator, "hello");
+    try document.appendRow(allocator, " world");
+    try document.appendRow(allocator, " world");
+    document.cursor_y = 0;
+    document.cursor_x = 0;
+
+    try testing.expect(!(try handleKey(.{ .codepoint = 's' }, &document, &editor_state, allocator)));
+    try testing.expectEqual(.INSERT, document.mode);
+    try testing.expect(!(try handleKey(.{
+        .codepoint = 'w',
+        .text = "w",
+    }, &document, &editor_state, allocator)));
+    try testing.expectEqualStrings("wello", document.rows.items[0].chars.items);
+}
+
+test "substituting char" {
+    const allocator = testing.allocator;
+    var document: editor.Editor = .{};
+    defer document.deinit(allocator);
+    var editor_state: state.State = .{};
+
+    try document.appendRow(allocator, "hello");
+    try document.appendRow(allocator, " world");
+    try document.appendRow(allocator, " world");
+    document.cursor_y = 0;
+    document.cursor_x = 2;
+
+    try testing.expect(!(try handleKey(.{ .codepoint = 's' }, &document, &editor_state, allocator)));
+    try testing.expectEqual(.INSERT, document.mode);
+    try testing.expect(!(try handleKey(.{
+        .codepoint = 'w',
+        .text = "w",
+    }, &document, &editor_state, allocator)));
+    try testing.expect(!(try handleKey(.{
+        .codepoint = 'w',
+        .text = "w",
+    }, &document, &editor_state, allocator)));
+    try testing.expectEqualStrings("hwwllo", document.rows.items[0].chars.items);
+}
+
+test "substituting char on empty file" {
+    const allocator = testing.allocator;
+    var document: editor.Editor = .{};
+    defer document.deinit(allocator);
+    var editor_state: state.State = .{};
+
+    try testing.expect(!(try handleKey(.{ .codepoint = 's' }, &document, &editor_state, allocator)));
+    try testing.expectEqual(.INSERT, document.mode);
+    try testing.expect(!(try handleKey(.{
+        .codepoint = 'w',
+        .text = "w",
+    }, &document, &editor_state, allocator)));
+    try testing.expectEqualStrings("w", document.rows.items[0].chars.items);
+}
+
+test "substituting char on empty line" {
+    const allocator = testing.allocator;
+    var document: editor.Editor = .{};
+    defer document.deinit(allocator);
+    var editor_state: state.State = .{};
+
+    try document.appendRow(allocator, "");
+
+    try testing.expect(!(try handleKey(.{ .codepoint = 's' }, &document, &editor_state, allocator)));
+    try testing.expectEqual(.INSERT, document.mode);
+    try testing.expect(!(try handleKey(.{
+        .codepoint = 'w',
+        .text = "w",
+    }, &document, &editor_state, allocator)));
+    try testing.expectEqualStrings("w", document.rows.items[0].chars.items);
+}
+
+test "substituting line at cursor x 0" {
+    const allocator = testing.allocator;
+    var document: editor.Editor = .{};
+    defer document.deinit(allocator);
+    var editor_state: state.State = .{};
+
+    try document.appendRow(allocator, "hello");
+    try document.appendRow(allocator, " world");
+    try document.appendRow(allocator, " world");
+    document.cursor_y = 0;
+    document.cursor_x = 0;
+
+    try testing.expect(!(try handleKey(.{ .codepoint = 'S' }, &document, &editor_state, allocator)));
+    try testing.expectEqual(.INSERT, document.mode);
+    try testing.expect(!(try handleKey(.{
+        .codepoint = 'w',
+        .text = "w",
+    }, &document, &editor_state, allocator)));
+    try testing.expectEqualStrings("w", document.rows.items[0].chars.items);
+}
+
+test "substituting line" {
+    const allocator = testing.allocator;
+    var document: editor.Editor = .{};
+    defer document.deinit(allocator);
+    var editor_state: state.State = .{};
+
+    try document.appendRow(allocator, "hello");
+    try document.appendRow(allocator, " world");
+    try document.appendRow(allocator, " world");
+    document.cursor_y = 0;
+    document.cursor_x = 2;
+
+    try testing.expect(!(try handleKey(.{ .codepoint = 'S' }, &document, &editor_state, allocator)));
+    try testing.expectEqual(.INSERT, document.mode);
+    try testing.expect(!(try handleKey(.{
+        .codepoint = 'w',
+        .text = "w",
+    }, &document, &editor_state, allocator)));
+    try testing.expect(!(try handleKey(.{
+        .codepoint = 'w',
+        .text = "w",
+    }, &document, &editor_state, allocator)));
+    try testing.expectEqualStrings("ww", document.rows.items[0].chars.items);
+}
+
+test "substituting line on empty file" {
+    const allocator = testing.allocator;
+    var document: editor.Editor = .{};
+    defer document.deinit(allocator);
+    var editor_state: state.State = .{};
+
+    try testing.expect(!(try handleKey(.{ .codepoint = 'S' }, &document, &editor_state, allocator)));
+    try testing.expectEqual(.INSERT, document.mode);
+    try testing.expect(!(try handleKey(.{
+        .codepoint = 'w',
+        .text = "w",
+    }, &document, &editor_state, allocator)));
+    try testing.expectEqualStrings("w", document.rows.items[0].chars.items);
+}
+
+test "substituting line on empty line" {
+    const allocator = testing.allocator;
+    var document: editor.Editor = .{};
+    defer document.deinit(allocator);
+    var editor_state: state.State = .{};
+
+    try document.appendRow(allocator, "");
+
+    try testing.expect(!(try handleKey(.{ .codepoint = 'S' }, &document, &editor_state, allocator)));
+    try testing.expectEqual(.INSERT, document.mode);
+    try testing.expect(!(try handleKey(.{
+        .codepoint = 'w',
+        .text = "w",
+    }, &document, &editor_state, allocator)));
+    try testing.expectEqualStrings("w", document.rows.items[0].chars.items);
 }
 
 // DELETING TEXT
