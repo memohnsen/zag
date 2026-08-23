@@ -1,10 +1,5 @@
 * Roadmap for Zag
 ** Post tutorial
-- [ ] auto indent
-  - get current row where append is being called
-  - check count of \t at start of line, go through each char until not \ or t
-  - insert count + 1 if last char on line is { or (, else insert count to start of line
-  - rerender
 - [ ] typing tab key does nothing
 - [ ] show keys pressed in bottom right of command bar for sequencing
 - [ ] base themes

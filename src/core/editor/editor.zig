@@ -174,7 +174,6 @@ pub const Editor = struct {
     ) !void {
         const y = self.cursor_y;
         const x = self.cursor_x;
-        // const tab_count = mem.count(u8, self.rows.items[y].chars.items, "\t");
 
         if (self.rows.items.len == 0) {
             try self.insertRow(allocator, "", self.cursor_y);
@@ -183,17 +182,23 @@ pub const Editor = struct {
         const remaining_row_chars = self.rows.items[y].chars.items[x..];
         try self.insertRow(allocator, remaining_row_chars, y + 1);
 
-        // BUG: this currently works in practice, but not in actual ui rendering
-        // not sure why
-        if (mem.startsWith(u8, self.rows.items[y].chars.items, "\t")) {
-            try self.rows.items[y + 1].insertText(allocator, 0, "\t");
+        const first_char = mem.indexOfNone(u8, self.rows.items[y].chars.items, " \t") orelse self.rows.items[y].chars.items.len;
+
+        try self.rows.items[y + 1].insertText(allocator, 0, self.rows.items[y].chars.items[0..first_char]);
+        if (mem.endsWith(u8, self.rows.items[y].chars.items, "{") and
+            self.cursor_x == self.rows.items[y].chars.items.len)
+        {
+            try self.rows.items[y + 1].insertText(allocator, first_char, "\t");
+            self.cursor_x = first_char + 1;
+        } else {
+            self.cursor_x = first_char;
         }
 
         const og_row = &self.rows.items[y];
         og_row.chars.shrinkRetainingCapacity(x);
         try og_row.updateRender(allocator);
+
         self.cursor_y = y + 1;
-        self.cursor_x = 0;
     }
 
     pub fn insertText(self: *Editor, allocator: mem.Allocator, input: []const u8) !void {
@@ -613,6 +618,38 @@ test "inserting new row with multiple \t in current line" {
     try testing.expectEqualStrings("\t\t", document.rows.items[2].chars.items);
 }
 
+test "inserting new row with spaces instead of tabs in current line" {
+    const allocator = testing.allocator;
+    var document = Editor{};
+    defer document.deinit(allocator);
+
+    try document.appendRow(allocator, "zero");
+    try document.appendRow(allocator, "    one");
+    document.cursor_y = 1;
+    document.cursor_x = document.rows.items[document.cursor_y].chars.items.len;
+
+    try document.insertNewLine(allocator);
+    try testing.expectEqualStrings("zero", document.rows.items[0].chars.items);
+    try testing.expectEqualStrings("    one", document.rows.items[1].chars.items);
+    try testing.expectEqualStrings("    ", document.rows.items[2].chars.items);
+}
+
+test "inserting new row with multiple spaces instead of tabs in current line" {
+    const allocator = testing.allocator;
+    var document = Editor{};
+    defer document.deinit(allocator);
+
+    try document.appendRow(allocator, "zero");
+    try document.appendRow(allocator, "        one");
+    document.cursor_y = 1;
+    document.cursor_x = document.rows.items[document.cursor_y].chars.items.len;
+
+    try document.insertNewLine(allocator);
+    try testing.expectEqualStrings("zero", document.rows.items[0].chars.items);
+    try testing.expectEqualStrings("        one", document.rows.items[1].chars.items);
+    try testing.expectEqualStrings("        ", document.rows.items[2].chars.items);
+}
+
 test "inserting new row with { at end of line" {
     const allocator = testing.allocator;
     var document = Editor{};
@@ -627,6 +664,54 @@ test "inserting new row with { at end of line" {
     try testing.expectEqualStrings("zero", document.rows.items[0].chars.items);
     try testing.expectEqualStrings("one {", document.rows.items[1].chars.items);
     try testing.expectEqualStrings("\t", document.rows.items[2].chars.items);
+}
+
+test "inserting new row with { and \t" {
+    const allocator = testing.allocator;
+    var document = Editor{};
+    defer document.deinit(allocator);
+
+    try document.appendRow(allocator, "zero");
+    try document.appendRow(allocator, "\tone {");
+    document.cursor_y = 1;
+    document.cursor_x = document.rows.items[document.cursor_y].chars.items.len;
+
+    try document.insertNewLine(allocator);
+    try testing.expectEqualStrings("zero", document.rows.items[0].chars.items);
+    try testing.expectEqualStrings("\tone {", document.rows.items[1].chars.items);
+    try testing.expectEqualStrings("\t\t", document.rows.items[2].chars.items);
+}
+
+test "inserting new row with { and \t in the middle of the line" {
+    const allocator = testing.allocator;
+    var document = Editor{};
+    defer document.deinit(allocator);
+
+    try document.appendRow(allocator, "zero");
+    try document.appendRow(allocator, "\tone {");
+    document.cursor_y = 1;
+    document.cursor_x = 3;
+
+    try document.insertNewLine(allocator);
+    try testing.expectEqualStrings("zero", document.rows.items[0].chars.items);
+    try testing.expectEqualStrings("\ton", document.rows.items[1].chars.items);
+    try testing.expectEqualStrings("\te {", document.rows.items[2].chars.items);
+}
+
+test "inserting new row with { and nested \t" {
+    const allocator = testing.allocator;
+    var document = Editor{};
+    defer document.deinit(allocator);
+
+    try document.appendRow(allocator, "zero");
+    try document.appendRow(allocator, "\t\t\tone {");
+    document.cursor_y = 1;
+    document.cursor_x = document.rows.items[document.cursor_y].chars.items.len;
+
+    try document.insertNewLine(allocator);
+    try testing.expectEqualStrings("zero", document.rows.items[0].chars.items);
+    try testing.expectEqualStrings("\t\t\tone {", document.rows.items[1].chars.items);
+    try testing.expectEqualStrings("\t\t\t\t", document.rows.items[2].chars.items);
 }
 
 test "inserting new line" {
