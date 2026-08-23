@@ -260,7 +260,19 @@ pub fn handleKey(
         },
         .new_line_up => {
             try document.insertRow(allocator, "", document.cursor_y);
-            document.cursor_x = 0;
+
+            if (document.rows.items.len != 0 and document.cursor_y != 0) {
+                const first_char = mem.indexOfNone(u8, document.rows.items[document.cursor_y - 1].chars.items, " \t") orelse document.rows.items[document.cursor_y - 1].chars.items.len;
+                try document.rows.items[document.cursor_y].insertText(allocator, 0, document.rows.items[document.cursor_y - 1].chars.items[0..first_char]);
+
+                if (mem.endsWith(u8, document.rows.items[document.cursor_y - 1].chars.items, "{")) {
+                    try document.rows.items[document.cursor_y].insertText(allocator, first_char, "\t");
+                    document.cursor_x = first_char + 1;
+                } else {
+                    document.cursor_x = first_char;
+                }
+            }
+
             document.mode = .INSERT;
         },
         .new_line_down => {
@@ -268,8 +280,18 @@ pub fn handleKey(
                 try document.insertRow(allocator, "", document.cursor_y);
             }
             try document.insertRow(allocator, "", document.cursor_y + 1);
+
+            const first_char = mem.indexOfNone(u8, document.rows.items[document.cursor_y].chars.items, " \t") orelse document.rows.items[document.cursor_y].chars.items.len;
+
+            try document.rows.items[document.cursor_y + 1].insertText(allocator, 0, document.rows.items[document.cursor_y].chars.items[0..first_char]);
+            if (mem.endsWith(u8, document.rows.items[document.cursor_y].chars.items, "{")) {
+                try document.rows.items[document.cursor_y + 1].insertText(allocator, first_char, "\t");
+                document.cursor_x = first_char + 1;
+            } else {
+                document.cursor_x = first_char;
+            }
+
             document.cursor_y += 1;
-            document.cursor_x = 0;
             document.mode = .INSERT;
         },
 
@@ -1338,6 +1360,202 @@ test "inserting new line on empty file O" {
     try testing.expect(document.cursor_y == 0);
     try testing.expect(document.rows.items.len == 1);
     try testing.expectEqualStrings("", document.rows.items[0].chars.items);
+}
+
+test "inserting new line above with \t" {
+    const allocator = testing.allocator;
+    var document: editor.Editor = .{};
+    defer document.deinit(allocator);
+    var editor_state: state.State = .{};
+
+    try document.appendRow(allocator, "\tend");
+    try document.appendRow(allocator, "}");
+    document.cursor_y = 1;
+
+    try testing.expect(!(try handleKey(.{ .codepoint = 'O' }, &document, &editor_state, allocator)));
+    try testing.expectEqualStrings("\tend", document.rows.items[0].chars.items);
+    try testing.expectEqualStrings("\t", document.rows.items[1].chars.items);
+    try testing.expectEqualStrings("}", document.rows.items[2].chars.items);
+}
+
+test "inserting new line above with spaces" {
+    const allocator = testing.allocator;
+    var document: editor.Editor = .{};
+    defer document.deinit(allocator);
+    var editor_state: state.State = .{};
+
+    try document.appendRow(allocator, "    end");
+    try document.appendRow(allocator, "}");
+    document.cursor_y = 1;
+
+    try testing.expect(!(try handleKey(.{ .codepoint = 'O' }, &document, &editor_state, allocator)));
+    try testing.expectEqualStrings("    end", document.rows.items[0].chars.items);
+    try testing.expectEqualStrings("    ", document.rows.items[1].chars.items);
+    try testing.expectEqualStrings("}", document.rows.items[2].chars.items);
+}
+
+test "inserting new line above with spaces and no text" {
+    const allocator = testing.allocator;
+    var document: editor.Editor = .{};
+    defer document.deinit(allocator);
+    var editor_state: state.State = .{};
+
+    try document.appendRow(allocator, "    ");
+
+    try testing.expect(!(try handleKey(.{ .codepoint = 'O' }, &document, &editor_state, allocator)));
+    try testing.expectEqualStrings("", document.rows.items[0].chars.items);
+    try testing.expectEqualStrings("    ", document.rows.items[1].chars.items);
+}
+
+test "inserting new line above with \t and no text" {
+    const allocator = testing.allocator;
+    var document: editor.Editor = .{};
+    defer document.deinit(allocator);
+    var editor_state: state.State = .{};
+
+    try document.appendRow(allocator, "\t");
+
+    try testing.expect(!(try handleKey(.{ .codepoint = 'O' }, &document, &editor_state, allocator)));
+    try testing.expectEqualStrings("", document.rows.items[0].chars.items);
+    try testing.expectEqualStrings("\t", document.rows.items[1].chars.items);
+}
+
+test "inserting new line with spaces and no text" {
+    const allocator = testing.allocator;
+    var document: editor.Editor = .{};
+    defer document.deinit(allocator);
+    var editor_state: state.State = .{};
+
+    try document.appendRow(allocator, "    ");
+
+    try testing.expect(!(try handleKey(.{ .codepoint = 'o' }, &document, &editor_state, allocator)));
+    try testing.expectEqualStrings("    ", document.rows.items[0].chars.items);
+    try testing.expectEqualStrings("    ", document.rows.items[1].chars.items);
+}
+
+test "inserting new line with \t and no text" {
+    const allocator = testing.allocator;
+    var document: editor.Editor = .{};
+    defer document.deinit(allocator);
+    var editor_state: state.State = .{};
+
+    try document.appendRow(allocator, "\t");
+
+    try testing.expect(!(try handleKey(.{ .codepoint = 'o' }, &document, &editor_state, allocator)));
+    try testing.expectEqualStrings("\t", document.rows.items[0].chars.items);
+    try testing.expectEqualStrings("\t", document.rows.items[1].chars.items);
+}
+
+test "inserting new row with \t in current line" {
+    const allocator = testing.allocator;
+    var document: editor.Editor = .{};
+    defer document.deinit(allocator);
+    var editor_state: state.State = .{};
+
+    try document.appendRow(allocator, "zero");
+    try document.appendRow(allocator, "\tone");
+    document.cursor_y = 1;
+
+    try testing.expect(!(try handleKey(.{ .codepoint = 'o' }, &document, &editor_state, allocator)));
+    try testing.expectEqualStrings("zero", document.rows.items[0].chars.items);
+    try testing.expectEqualStrings("\tone", document.rows.items[1].chars.items);
+    try testing.expectEqualStrings("\t", document.rows.items[2].chars.items);
+}
+
+test "inserting new row with multiple \t in current line" {
+    const allocator = testing.allocator;
+    var document: editor.Editor = .{};
+    defer document.deinit(allocator);
+    var editor_state: state.State = .{};
+
+    try document.appendRow(allocator, "zero");
+    try document.appendRow(allocator, "\t\tone");
+    document.cursor_y = 1;
+
+    try testing.expect(!(try handleKey(.{ .codepoint = 'o' }, &document, &editor_state, allocator)));
+    try testing.expectEqualStrings("zero", document.rows.items[0].chars.items);
+    try testing.expectEqualStrings("\t\tone", document.rows.items[1].chars.items);
+    try testing.expectEqualStrings("\t\t", document.rows.items[2].chars.items);
+}
+
+test "inserting new row with spaces instead of tabs in current line" {
+    const allocator = testing.allocator;
+    var document: editor.Editor = .{};
+    defer document.deinit(allocator);
+    var editor_state: state.State = .{};
+
+    try document.appendRow(allocator, "zero");
+    try document.appendRow(allocator, "    one");
+    document.cursor_y = 1;
+
+    try testing.expect(!(try handleKey(.{ .codepoint = 'o' }, &document, &editor_state, allocator)));
+    try testing.expectEqualStrings("zero", document.rows.items[0].chars.items);
+    try testing.expectEqualStrings("    one", document.rows.items[1].chars.items);
+    try testing.expectEqualStrings("    ", document.rows.items[2].chars.items);
+}
+
+test "inserting new row with multiple spaces instead of tabs in current line" {
+    const allocator = testing.allocator;
+    var document: editor.Editor = .{};
+    defer document.deinit(allocator);
+    var editor_state: state.State = .{};
+
+    try document.appendRow(allocator, "zero");
+    try document.appendRow(allocator, "        one");
+    document.cursor_y = 1;
+
+    try testing.expect(!(try handleKey(.{ .codepoint = 'o' }, &document, &editor_state, allocator)));
+    try testing.expectEqualStrings("zero", document.rows.items[0].chars.items);
+    try testing.expectEqualStrings("        one", document.rows.items[1].chars.items);
+    try testing.expectEqualStrings("        ", document.rows.items[2].chars.items);
+}
+
+test "inserting new row with { at end of line" {
+    const allocator = testing.allocator;
+    var document: editor.Editor = .{};
+    defer document.deinit(allocator);
+    var editor_state: state.State = .{};
+
+    try document.appendRow(allocator, "zero");
+    try document.appendRow(allocator, "one {");
+    document.cursor_y = 1;
+
+    try testing.expect(!(try handleKey(.{ .codepoint = 'o' }, &document, &editor_state, allocator)));
+    try testing.expectEqualStrings("zero", document.rows.items[0].chars.items);
+    try testing.expectEqualStrings("one {", document.rows.items[1].chars.items);
+    try testing.expectEqualStrings("\t", document.rows.items[2].chars.items);
+}
+
+test "inserting new row with { and \t" {
+    const allocator = testing.allocator;
+    var document: editor.Editor = .{};
+    defer document.deinit(allocator);
+    var editor_state: state.State = .{};
+
+    try document.appendRow(allocator, "zero");
+    try document.appendRow(allocator, "\tone {");
+    document.cursor_y = 1;
+
+    try testing.expect(!(try handleKey(.{ .codepoint = 'o' }, &document, &editor_state, allocator)));
+    try testing.expectEqualStrings("zero", document.rows.items[0].chars.items);
+    try testing.expectEqualStrings("\tone {", document.rows.items[1].chars.items);
+    try testing.expectEqualStrings("\t\t", document.rows.items[2].chars.items);
+}
+
+test "inserting new row with { and nested \t" {
+    const allocator = testing.allocator;
+    var document: editor.Editor = .{};
+    defer document.deinit(allocator);
+    var editor_state: state.State = .{};
+
+    try document.appendRow(allocator, "zero");
+    try document.appendRow(allocator, "\t\t\tone {");
+    document.cursor_y = 1;
+
+    try testing.expect(!(try handleKey(.{ .codepoint = 'o' }, &document, &editor_state, allocator)));
+    try testing.expectEqualStrings("zero", document.rows.items[0].chars.items);
+    try testing.expectEqualStrings("\t\t\tone {", document.rows.items[1].chars.items);
+    try testing.expectEqualStrings("\t\t\t\t", document.rows.items[2].chars.items);
 }
 
 // JOINING ROWS
