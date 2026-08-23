@@ -107,7 +107,7 @@ pub const Config = struct {
         try file.writeStreamingAll(io, file_text);
     }
 
-    // when a new flag has been added to the config add that as a new line in the config file commented out
+    // TODO: when a new flag has been added to the config add that as a new line in the config file commented out
     // do not edit any other lines of the file
     // pub fn addNewFlags(
     //     self: *const Config,

@@ -1,0 +1,11 @@
+[tools]
+zig = "0.16"
+
+[tasks.run]
+run = "zig build run -- ./test.zig"
+[tasks.welcome]
+run = "zig build run"
+[tasks.build]
+run = "zig build"
+[tasks.test]
+run = "zig build check && zig build test"
