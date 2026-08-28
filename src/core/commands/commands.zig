@@ -41,6 +41,7 @@ const Command = enum {
     new_line_down,
     new_line_up,
     carriage_return,
+    tab,
 
     // MANIPULATION
     join_next_line,
@@ -258,6 +259,19 @@ pub fn handleKey(
         .carriage_return => {
             try document.insertNewLine(allocator);
         },
+        .tab => {
+            if (document.rows.items.len == 0) {
+                try document.insertRow(allocator, "", 0);
+            }
+
+            if (document.currentRow()) |row| {
+                const tab_width = 4 - (document.cursor_x % 4);
+                const spaces = try row.chars.addManyAt(allocator, document.cursor_x, tab_width);
+                @memset(spaces, ' ');
+                document.cursor_x += tab_width;
+                try document.rows.items[document.cursor_y].updateRender(allocator);
+            }
+        },
         .new_line_up => {
             try document.insertRow(allocator, "", document.cursor_y);
 
@@ -448,6 +462,7 @@ fn commandFromKey(key: vaxis.Key, document: *editor.Editor, pending_g: bool) Com
     if (key.matches('o', .{}) and document.mode == .NORMAL) return .new_line_down;
     if (key.matches('O', .{}) and document.mode == .NORMAL) return .new_line_up;
     if (key.matches(vaxis.Key.enter, .{}) and document.mode == .INSERT) return .carriage_return;
+    if (key.matches(vaxis.Key.tab, .{}) and document.mode == .INSERT) return .tab;
 
     // MANIPULATION
     if (key.matches('J', .{}) and document.mode == .NORMAL) return .join_next_line;
@@ -1556,6 +1571,61 @@ test "inserting new row with { and nested \t" {
     try testing.expectEqualStrings("zero", document.rows.items[0].chars.items);
     try testing.expectEqualStrings("\t\t\tone {", document.rows.items[1].chars.items);
     try testing.expectEqualStrings("\t\t\t\t", document.rows.items[2].chars.items);
+}
+
+test "tab inserts 4 spaces on empty row" {
+    const allocator = testing.allocator;
+    var document: editor.Editor = .{};
+    defer document.deinit(allocator);
+    var editor_state: state.State = .{};
+
+    try document.appendRow(allocator, "");
+    document.mode = .INSERT;
+
+    try testing.expectEqual(document.cursor_x, 0);
+    try testing.expect(!(try handleKey(.{ .codepoint = vaxis.Key.tab }, &document, &editor_state, allocator)));
+    try testing.expectEqualStrings("    ", document.rows.items[0].render.items);
+}
+
+test "tab inserts 4 spaces on no row" {
+    const allocator = testing.allocator;
+    var document: editor.Editor = .{};
+    defer document.deinit(allocator);
+    var editor_state: state.State = .{};
+
+    document.mode = .INSERT;
+
+    try testing.expectEqual(document.cursor_x, 0);
+    try testing.expect(!(try handleKey(.{ .codepoint = vaxis.Key.tab }, &document, &editor_state, allocator)));
+    try testing.expectEqualStrings("    ", document.rows.items[0].render.items);
+}
+
+test "tab inserts 4 spaces at the end of the row" {
+    const allocator = testing.allocator;
+    var document: editor.Editor = .{};
+    defer document.deinit(allocator);
+    var editor_state: state.State = .{};
+
+    document.mode = .INSERT;
+    try document.appendRow(allocator, "hello");
+    document.cursor_x = document.rows.items[document.cursor_y].chars.items.len;
+
+    try testing.expect(!(try handleKey(.{ .codepoint = vaxis.Key.tab }, &document, &editor_state, allocator)));
+    try testing.expectEqualStrings("hello   ", document.rows.items[0].render.items);
+}
+
+test "tab inserts spaces at the middle of the row" {
+    const allocator = testing.allocator;
+    var document: editor.Editor = .{};
+    defer document.deinit(allocator);
+    var editor_state: state.State = .{};
+
+    document.mode = .INSERT;
+    try document.appendRow(allocator, "hello");
+    document.cursor_x = 2;
+
+    try testing.expect(!(try handleKey(.{ .codepoint = vaxis.Key.tab }, &document, &editor_state, allocator)));
+    try testing.expectEqualStrings("he  llo", document.rows.items[0].render.items);
 }
 
 // JOINING ROWS

@@ -1,6 +1,5 @@
 * Roadmap for Zag
 ** Post tutorial
-- [ ] typing tab key does nothing
 - [ ] show keys pressed in bottom right of command bar for sequencing
 - [ ] base themes
 - [ ] treesitter for highlighting
@@ -9,6 +8,7 @@
 
 ** Far off
 - [ ] file tab line
+- [ ] text viewer in side bar
 - [ ] session management
 - [ ] windows
 - [ ] Add text highlighting

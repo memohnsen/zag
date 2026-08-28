@@ -85,15 +85,15 @@ zig build
 zig build test
 #+end_src
 
-or use the Justfile in the project
+or use mise in the project, start with mise install to set up Zig to the right version
 #+begin_src bash
-just run
+mise run run
 
-just welcome
+mise run welcome
 
-just build
+mise run build
 
-just test
+mise run test
 #+end_src
 
-When working with the project, just run will open the editor to a test file in the root. If you want to open the welcome screen run 'just welcome' or 'zig build run'
+When working with the project, mise run run will open the editor to a test file in the root. If you want to open the welcome screen run 'mise run welcome' or 'zig build run'
