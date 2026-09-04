@@ -13,7 +13,6 @@ pub const State = struct {
     // where the cursor was prior to entering the command buffer
     cursor_origin_x: usize = 0,
     cursor_origin_y: usize = 0,
-
     // These flags can be changed via keys in src/commands.zig
     // if :w or :wq was entered
     save_requested: bool = false,
@@ -30,6 +29,8 @@ pub const State = struct {
     pending_d: bool = false,
     // whether R was hit
     replace_mult: bool = false,
+    pending_motion: [32]u8 = undefined,
+    pending_motion_len: u8 = 0,
 
     pub fn deinit(self: *State, allocator: std.mem.Allocator) void {
         self.command_buffer.deinit(allocator);
@@ -85,6 +86,11 @@ pub const State = struct {
             self.clearText(document);
             self.notif_started = null;
         }
+    }
+
+    pub fn appendKeyToBuffer(self: *State, byte: u8) void {
+        self.pending_motion[self.pending_motion_len] = byte;
+        self.pending_motion_len += 1;
     }
 };
 

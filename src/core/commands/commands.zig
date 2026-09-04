@@ -84,6 +84,12 @@ pub fn handleKey(
 
     const command = commandFromKey(key, document, pending_g);
 
+    if (document.mode == .NORMAL) {
+        if (key.text) |text| {
+            editor_state.appendKeyToBuffer(text[0]);
+        }
+    }
+
     switch (command) {
         // NAVIGATION
         .left => {
@@ -2642,4 +2648,32 @@ test "replacing text with R" {
     try testing.expect(!(try handleKey(.{ .codepoint = vaxis.Key.escape }, &document, &editor_state, allocator)));
     try testing.expect(document.mode == .NORMAL);
     try testing.expectEqualStrings("", document.rows.items[1].chars.items);
+}
+
+// MOTIONS WITH DIGITS
+test "numbers map to right branch and switch state flag" {
+    const allocator = testing.allocator;
+    var document = editor.Editor{};
+    defer document.deinit(allocator);
+    var editor_state: state.State = .{};
+
+    try testing.expect(!(try handleKey(.{
+        .codepoint = '3',
+        .text = "3",
+    }, &document, &editor_state, allocator)));
+    try testing.expect(!(try handleKey(.{
+        .codepoint = 'd',
+        .text = "d",
+    }, &document, &editor_state, allocator)));
+    try testing.expectEqualStrings("3d", editor_state.pending_motion[0..editor_state.pending_motion_len]);
+
+    // essentially resets our array to blank
+    // replaces first char with new key and we only look at that char
+    // good enough for testing
+    editor_state.pending_motion_len = 0;
+    try testing.expect(!(try handleKey(.{
+        .codepoint = 'g',
+        .text = "g",
+    }, &document, &editor_state, allocator)));
+    try testing.expectEqualStrings("g", editor_state.pending_motion[0..editor_state.pending_motion_len]);
 }

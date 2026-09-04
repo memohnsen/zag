@@ -1,16 +1,10 @@
 * Roadmap for Zag
-** Post tutorial
-- [ ] show keys pressed in bottom right of command bar for sequencing
 - [ ] base themes
-- [ ] treesitter for highlighting
-- [ ] undo redo
-- [ ] motions with a count prefix
-
-** Far off
-- [ ] file tab line
 - [ ] text viewer in side bar
-- [ ] session management
 - [ ] windows
 - [ ] Add text highlighting
 - [ ] Add treesitter
+- [ ] undo redo
+- [ ] file tab line
 - [ ] integrated terminal
+- [ ] session management

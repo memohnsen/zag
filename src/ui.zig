@@ -11,6 +11,7 @@ pub const Buffers = struct {
     cursor: [256]u8 = undefined,
     command: [256]u8 = undefined,
     line_numbers: [512][16]u8 = undefined,
+    key_input: [256]u8 = undefined,
 };
 
 pub fn refresh(
@@ -24,7 +25,7 @@ pub fn refresh(
     window.clear();
     drawRows(window, document, editor_state, buffers);
     try drawStatusBar(window, document, &buffers.status, &buffers.cursor);
-    try drawCommandBar(window, editor_state, &buffers.command);
+    try drawCommandBar(window, editor_state, &buffers.command, &buffers.key_input);
 
     var screen_x: usize = 0;
     var screen_y: usize = 0;
@@ -210,7 +211,8 @@ fn unsavedEditsIcon(document: *const editor.Editor) []const u8 {
 fn drawCommandBar(
     window: vaxis.Window,
     editor_state: *const state.State,
-    buf: []u8,
+    command_buf: []u8,
+    key_buf: []u8,
 ) !void {
     if (window.height == 0) {
         return;
@@ -222,10 +224,20 @@ fn drawCommandBar(
     });
 
     // this buffer should never be able to overflow since we are trimming the command
-    const file_text = std.fmt.bufPrint(buf, "{s}", .{editor_state.command_buffer.items[0..@min(editor_state.command_buffer.items.len, 250)]}) catch {
-        unreachable;
-    };
+    const file_text = std.fmt.bufPrint(command_buf, "{s}", .{editor_state.command_buffer.items[0..@min(editor_state.command_buffer.items.len, 250)]}) catch unreachable;
     _ = status_window.printSegment(.{ .text = file_text }, .{ .wrap = .none });
+
+    const key_input = std.fmt.bufPrint(key_buf, "{s}", .{
+        editor_state.pending_motion,
+    }) catch unreachable;
+    const text_width: u16 = @intCast(key_input.len);
+    const text_col = status_window.width -| text_width;
+    _ = status_window.printSegment(.{
+        .text = key_input,
+    }, .{
+        .wrap = .none,
+        .col_offset = text_col,
+    });
 }
 
 fn drawWelcome(window: vaxis.Window, screen_row: usize) void {

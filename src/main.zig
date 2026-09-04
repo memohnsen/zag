@@ -25,6 +25,7 @@ fn run(init: std.process.Init) !void {
     const io = init.io;
     const gpa = init.gpa;
 
+    // set up settings from $HOME/.config/zag/config.toml
     var editor_settings = config.Config{};
     const home_dir = init.environ_map.get("HOME") orelse {
         return error.HomeNotFound;
@@ -152,4 +153,5 @@ test "all" {
     _ = @import("notifications.zig");
     _ = @import("snapshots/snaps.zig");
     _ = @import("core/config.zig");
+    _ = @import("core/commands/parser.zig");
 }
