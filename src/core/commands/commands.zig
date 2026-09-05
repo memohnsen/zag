@@ -7,8 +7,9 @@ const vaxis = @import("vaxis");
 const editor = @import("../editor/editor.zig");
 const state = @import("../editor/state.zig");
 const runner = @import("runner.zig");
+const parser = @import("parser.zig");
 
-const Command = enum {
+pub const Command = enum {
     // NAVIGATION
     left,
     right,
@@ -89,6 +90,8 @@ pub fn handleKey(
             editor_state.appendKeyToBuffer(text[0]);
         }
     }
+
+    // const command = parser.keyActionParser(key, document, editor_state);
 
     switch (command) {
         // NAVIGATION
@@ -2651,7 +2654,7 @@ test "replacing text with R" {
 }
 
 // MOTIONS WITH DIGITS
-test "numbers map to right branch and switch state flag" {
+test "keys append to state" {
     const allocator = testing.allocator;
     var document = editor.Editor{};
     defer document.deinit(allocator);
