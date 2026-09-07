@@ -62,23 +62,25 @@ pub fn keyActionParser(key: vaxis.Key, document: *editor.Editor, editor_state: *
             // at that point we know where the slices are for numbers and letters
             var cutoff_index: u8 = 0;
             while (cutoff_index < editor_state.pending_motion_len) : (cutoff_index += 1) {
-                if (!std.ascii.isAlphabetic(editor_state.pending_motion[cutoff_index])) {
+                if (std.ascii.isDigit(editor_state.pending_motion[cutoff_index])) {
                     continue;
                 } else {
                     break;
                 }
             }
 
-            // const count = editor_state.pending_motion[0..cutoff_index];
+            const count = editor_state.pending_motion[0..cutoff_index];
+            if (count.len > 0 and count[0] == '0') {
+                return .line_start;
+            }
             const letters = editor_state.pending_motion[cutoff_index..editor_state.pending_motion_len];
 
             // NAVIGATION
             if (mem.eql(u8, "G", letters)) return .document_end;
-            if (mem.eql(u8, "0", letters)) return .line_start;
             if (mem.eql(u8, "gh", letters)) return .first_char;
             if (mem.eql(u8, "_", letters)) return .first_char;
             if (mem.eql(u8, "$", letters)) return .line_end;
-            if (mem.eql(u8, "l", letters)) return .line_end;
+            if (mem.eql(u8, "gl", letters)) return .line_end;
             if (mem.eql(u8, "gg", letters)) return .doc_start_gg;
             if (mem.eql(u8, "H", letters)) return .top;
             if (mem.eql(u8, "M", letters)) return .middle;
@@ -126,17 +128,12 @@ pub fn keyActionParser(key: vaxis.Key, document: *editor.Editor, editor_state: *
             if (mem.eql(u8, "n", letters)) return .search_next;
             if (mem.eql(u8, "N", letters)) return .search_prev;
 
-            return .normal;
+            return .other;
         } else {
             return .other;
         },
     };
 }
-
-// fn commandFromKey(key: vaxis.Key, document: *editor.Editor, pending_g: bool) Command {
-//
-//
-// }
 
 test "G returns document_end" {
     const allocator = testing.allocator;
@@ -144,10 +141,9 @@ test "G returns document_end" {
     defer document.deinit(allocator);
     var editor_state: state.State = .{};
 
-    try testing.expectEqual(.document_end, keyActionParser(.{
-        .codepoint = 'G',
-        .text = "G",
-    }, &document, &editor_state));
+    editor_state.pending_motion_len = 1;
+    @memcpy(editor_state.pending_motion[0..editor_state.pending_motion_len], "G");
+    try testing.expectEqual(.document_end, keyActionParser(.{ .codepoint = 'G' }, &document, &editor_state));
 }
 
 test "multi char commands work" {

@@ -228,7 +228,7 @@ fn drawCommandBar(
     _ = status_window.printSegment(.{ .text = file_text }, .{ .wrap = .none });
 
     const key_input = std.fmt.bufPrint(key_buf, "{s}", .{
-        editor_state.pending_motion,
+        editor_state.pending_motion[0..editor_state.pending_motion_len],
     }) catch unreachable;
     const text_width: u16 = @intCast(key_input.len);
     const text_col = status_window.width -| text_width;

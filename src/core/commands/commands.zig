@@ -77,21 +77,16 @@ pub fn handleKey(
     editor_state: *state.State,
     allocator: mem.Allocator,
 ) !bool {
-    // load pending editor_state into a const so we don't have to false it every branch
-    const pending_g = editor_state.pending_g;
-    editor_state.pending_g = false;
-    const pending_d = editor_state.pending_d;
-    editor_state.pending_d = false;
-
-    const command = commandFromKey(key, document, pending_g);
-
     if (document.mode == .NORMAL) {
         if (key.text) |text| {
             editor_state.appendKeyToBuffer(text[0]);
+            // remove all special chars so its only u8
+        } else if (key.codepoint >= ' ' and key.codepoint <= '~') {
+            editor_state.appendKeyToBuffer(@intCast(key.codepoint));
         }
     }
 
-    // const command = parser.keyActionParser(key, document, editor_state);
+    const command = parser.keyActionParser(key, document, editor_state);
 
     switch (command) {
         // NAVIGATION
@@ -120,12 +115,7 @@ pub fn handleKey(
             if (document.cursor_y + 1 < document.rows.items.len) document.cursor_y += 1;
         },
         .doc_start_gg => {
-            if (pending_g) {
-                document.cursor_y = 0;
-                editor_state.pending_g = false;
-            } else {
-                editor_state.pending_g = true;
-            }
+            document.cursor_y = 0;
         },
         .document_end => {
             if (document.rows.items.len > 0) document.cursor_y = document.rows.items.len - 1;
@@ -136,11 +126,9 @@ pub fn handleKey(
             } else {
                 document.cursor_x = 0;
             }
-            editor_state.pending_g = false;
         },
         .line_start => {
             document.cursor_x = 0;
-            editor_state.pending_g = false;
         },
         .line_end => {
             if (document.currentRow()) |row| {
@@ -148,7 +136,6 @@ pub fn handleKey(
             } else {
                 document.cursor_x = 0;
             }
-            editor_state.pending_g = false;
         },
         .top => {
             document.cursor_y = document.row_offset;
@@ -202,6 +189,7 @@ pub fn handleKey(
             }
             editor_state.clearText(document);
             editor_state.replace_mult = false;
+            editor_state.pending_motion_len = 0;
         },
         .visual => document.mode = .VISUAL,
         .command => {
@@ -378,16 +366,11 @@ pub fn handleKey(
             }
         },
         .delete_line => {
-            if (pending_d) {
-                try document.removeRow(allocator, document.cursor_y);
-                if (document.rows.items.len == 0) {
-                    document.cursor_y = 0;
-                } else if (document.cursor_y >= document.rows.items.len) {
-                    document.cursor_y = document.cursor_y -| 1;
-                }
-                editor_state.pending_d = false;
-            } else {
-                editor_state.pending_d = true;
+            try document.removeRow(allocator, document.cursor_y);
+            if (document.rows.items.len == 0) {
+                document.cursor_y = 0;
+            } else if (document.cursor_y >= document.rows.items.len) {
+                document.cursor_y = document.cursor_y -| 1;
             }
         },
         .delete_line_remaining => {
@@ -395,8 +378,6 @@ pub fn handleKey(
         },
 
         .other => {
-            editor_state.pending_g = false;
-            editor_state.pending_d = false;
             if (document.mode == .INSERT) {
                 if (key.text) |text| {
                     try document.insertText(allocator, text);
@@ -426,86 +407,12 @@ pub fn handleKey(
         },
     }
 
+    if (command != .other) {
+        editor_state.pending_motion_len = 0;
+    }
+
     clampCursorX(document);
     return false;
-}
-
-fn commandFromKey(key: vaxis.Key, document: *editor.Editor, pending_g: bool) Command {
-    if (key.matches(vaxis.Key.escape, .{}) and document.mode != .NORMAL) return .normal;
-
-    // NAVIGATION
-    if (key.matches('G', .{}) and document.mode == .NORMAL) return .document_end;
-    if (key.matches('0', .{}) and document.mode == .NORMAL) return .line_start;
-    if (key.matches('h', .{}) and document.mode == .NORMAL and pending_g) return .first_char;
-    if (key.matches('_', .{}) and document.mode == .NORMAL) return .first_char;
-    if (key.matches('$', .{}) and document.mode == .NORMAL) return .line_end;
-    if (key.matches('l', .{}) and document.mode == .NORMAL and pending_g) return .line_end;
-    if (key.matches('g', .{}) and document.mode == .NORMAL) return .doc_start_gg;
-    if (key.matches('H', .{}) and document.mode == .NORMAL) return .top;
-    if (key.matches('M', .{}) and document.mode == .NORMAL) return .middle;
-    if (key.matches('L', .{}) and document.mode == .NORMAL) return .bottom;
-    if (key.matches('d', .{ .ctrl = true }) and document.mode == .NORMAL) return .page_down;
-    if (key.matches('u', .{ .ctrl = true }) and document.mode == .NORMAL) return .page_up;
-    if (key.matches('w', .{}) and document.mode == .NORMAL) return .next_word_start;
-    if (key.matches('W', .{}) and document.mode == .NORMAL) return .next_space_start;
-    if (key.matches('e', .{}) and document.mode == .NORMAL) return .next_word_end;
-    if (key.matches('E', .{}) and document.mode == .NORMAL) return .next_space_end;
-    if (key.matches('b', .{}) and document.mode == .NORMAL) return .last_word_start;
-    if (key.matches('B', .{}) and document.mode == .NORMAL) return .last_space_start;
-    if (key.matches('}', .{}) and document.mode == .NORMAL) return .next_empty_row;
-    if (key.matches('{', .{}) and document.mode == .NORMAL) return .prev_empty_row;
-    if (key.matches(vaxis.Key.backspace, .{}) and document.mode == .NORMAL) return .left;
-    if (key.matches(vaxis.Key.enter, .{}) and document.mode == .NORMAL) return .down;
-
-    // these must come after otherwise pending g will never catch
-    if (key.matches('h', .{}) and document.mode == .NORMAL) return .left;
-    if (key.matches('j', .{}) and document.mode == .NORMAL) return .down;
-    if (key.matches('k', .{}) and document.mode == .NORMAL) return .up;
-    if (key.matches('l', .{}) and document.mode == .NORMAL) return .right;
-
-    // INSERTION
-    if (key.matches('i', .{}) and document.mode == .NORMAL) return .insert_left;
-    if (key.matches('I', .{}) and document.mode == .NORMAL) return .insert_start;
-    if (key.matches('a', .{}) and document.mode == .NORMAL) return .insert_right;
-    if (key.matches('A', .{}) and document.mode == .NORMAL) return .insert_end;
-    if (key.matches('o', .{}) and document.mode == .NORMAL) return .new_line_down;
-    if (key.matches('O', .{}) and document.mode == .NORMAL) return .new_line_up;
-    if (key.matches(vaxis.Key.enter, .{}) and document.mode == .INSERT) return .carriage_return;
-    if (key.matches(vaxis.Key.tab, .{}) and document.mode == .INSERT) return .tab;
-
-    // MANIPULATION
-    if (key.matches('J', .{}) and document.mode == .NORMAL) return .join_next_line;
-    if (key.matches('s', .{}) and document.mode == .NORMAL) return .substitute_char;
-    if (key.matches('S', .{}) and document.mode == .NORMAL) return .substitute_line;
-
-    // DELETION
-    if (key.matches(vaxis.Key.backspace, .{}) and
-        (document.mode == .INSERT or document.mode == .COMMAND or document.mode == .SEARCH)) return .delete_left;
-    if (key.matches('x', .{}) and document.mode == .NORMAL) return .delete_current;
-    if (key.matches('X', .{}) and document.mode == .NORMAL) return .delete_left;
-    if (key.matches('d', .{}) and document.mode == .NORMAL) return .delete_line;
-    if (key.matches('D', .{}) and document.mode == .NORMAL) return .delete_line_remaining;
-
-    // MODES
-    if (key.matches('r', .{}) and document.mode == .NORMAL) return .replace;
-    if (key.matches('R', .{}) and document.mode == .NORMAL) return .replace_mult;
-    if (key.matches('v', .{}) and document.mode == .NORMAL) return .visual;
-    if (key.matches('V', .{}) and document.mode == .NORMAL) return .visual;
-    if (key.matches(':', .{}) and document.mode == .NORMAL) return .command;
-    if (key.matches(vaxis.Key.enter, .{}) and document.mode == .COMMAND) return .run_command;
-    if (key.matches('/', .{}) and document.mode == .NORMAL) return .search;
-    if (key.matches('n', .{}) and document.mode == .NORMAL) return .search_next;
-    if (key.matches('N', .{}) and document.mode == .NORMAL) return .search_prev;
-    if (key.matches(vaxis.Key.enter, .{}) and document.mode == .SEARCH) return .run_search;
-
-    // ARROWS
-    return switch (key.codepoint) {
-        vaxis.Key.left => .left,
-        vaxis.Key.right => .right,
-        vaxis.Key.up => .up,
-        vaxis.Key.down => .down,
-        else => .other,
-    };
 }
 
 fn clampCursorX(document: *editor.Editor) void {
@@ -583,10 +490,8 @@ test "gg and G move to document boundaries" {
     try testing.expectEqual(@as(usize, 2), document.cursor_y);
 
     try testing.expect(!(try handleKey(.{ .codepoint = 'g' }, &document, &editor_state, allocator)));
-    try testing.expect(editor_state.pending_g);
     try testing.expect(!(try handleKey(.{ .codepoint = 'g' }, &document, &editor_state, allocator)));
     try testing.expectEqual(@as(usize, 0), document.cursor_y);
-    try testing.expect(!editor_state.pending_g);
 }
 
 test "0 and gh move to line start" {
@@ -603,7 +508,6 @@ test "0 and gh move to line start" {
 
     document.cursor_x = 3;
     try testing.expect(!(try handleKey(.{ .codepoint = 'g' }, &document, &editor_state, allocator)));
-    try testing.expect(editor_state.pending_g);
     try testing.expect(!(try handleKey(.{ .codepoint = 'h' }, &document, &editor_state, allocator)));
     try testing.expectEqual(@as(usize, 0), document.cursor_x);
 }
@@ -621,7 +525,6 @@ test "$ and gl move to line end" {
 
     document.cursor_x = 0;
     try testing.expect(!(try handleKey(.{ .codepoint = 'g' }, &document, &editor_state, allocator)));
-    try testing.expect(editor_state.pending_g);
     try testing.expect(!(try handleKey(.{ .codepoint = 'l' }, &document, &editor_state, allocator)));
     try testing.expectEqual(@as(usize, 4), document.cursor_x);
 }

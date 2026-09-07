@@ -13,7 +13,6 @@ pub const State = struct {
     // where the cursor was prior to entering the command buffer
     cursor_origin_x: usize = 0,
     cursor_origin_y: usize = 0,
-    // These flags can be changed via keys in src/commands.zig
     // if :w or :wq was entered
     save_requested: bool = false,
     // is a notif showing in the buffer or not
@@ -24,9 +23,6 @@ pub const State = struct {
     invalid_command: bool = false,
     // search term not found
     invalid_search: bool = false,
-    // pending chars for multichar motions like gg, gl, gh, dd
-    pending_g: bool = false,
-    pending_d: bool = false,
     // whether R was hit
     replace_mult: bool = false,
     pending_motion: [32]u8 = undefined,
