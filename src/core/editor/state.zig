@@ -27,6 +27,7 @@ pub const State = struct {
     replace_mult: bool = false,
     pending_motion: [32]u8 = undefined,
     pending_motion_len: u8 = 0,
+    pending_motion_count: u16 = 1,
 
     pub fn deinit(self: *State, allocator: std.mem.Allocator) void {
         self.command_buffer.deinit(allocator);

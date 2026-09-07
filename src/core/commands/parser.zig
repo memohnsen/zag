@@ -11,17 +11,6 @@ const state = @import("../editor/state.zig");
 // Matcher decides: complete → run and clear; prefix of something (3, 3g, d, gg waiting, f) → keep; invalid → beep/clear
 // Parse the count from the chord when you execute
 pub fn keyActionParser(key: vaxis.Key, document: *editor.Editor, editor_state: *state.State) commands.Command {
-    // TODO: items are stored in state
-    // every keypress parse that state
-    // if whats in there matches a command, run it and clear buffer
-    // else continue
-    //
-    // this becomes a rewrite of commandFromKey
-    // rather than matching on key byte
-    // we get the state array, split into nums and letters
-    // match letters to valid commands
-    // repeat nums times
-
     if (document.mode == .NORMAL) {
         if (key.matches('d', .{ .ctrl = true })) return .page_down;
         if (key.matches('u', .{ .ctrl = true })) return .page_up;
@@ -70,6 +59,8 @@ pub fn keyActionParser(key: vaxis.Key, document: *editor.Editor, editor_state: *
             }
 
             const count = editor_state.pending_motion[0..cutoff_index];
+            editor_state.pending_motion_count = if (count.len == 0) 1 else std.fmt.parseInt(u16, count, 10) catch 1;
+            // 0 does not count as a number for a prefix as the first num
             if (count.len > 0 and count[0] == '0') {
                 return .line_start;
             }
@@ -155,4 +146,16 @@ test "multi char commands work" {
     editor_state.pending_motion_len = 2;
     @memcpy(editor_state.pending_motion[0..editor_state.pending_motion_len], "dd");
     try testing.expectEqual(.delete_line, keyActionParser(.{ .codepoint = 'd' }, &document, &editor_state));
+}
+
+test "count is parsed to num" {
+    const allocator = testing.allocator;
+    var document: editor.Editor = .{};
+    defer document.deinit(allocator);
+    var editor_state: state.State = .{};
+
+    editor_state.pending_motion_len = 3;
+    @memcpy(editor_state.pending_motion[0..editor_state.pending_motion_len], "4dd");
+    try testing.expectEqual(.delete_line, keyActionParser(.{ .codepoint = 'd' }, &document, &editor_state));
+    try testing.expectEqual(4, editor_state.pending_motion_count);
 }

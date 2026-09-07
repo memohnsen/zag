@@ -87,328 +87,336 @@ pub fn handleKey(
     }
 
     const command = parser.keyActionParser(key, document, editor_state);
+    const motion_count = switch (command) {
+        .left, .right, .up, .down, .next_word_start, .delete_current, .delete_line => editor_state.pending_motion_count,
+        else => 1,
+    };
 
-    switch (command) {
-        // NAVIGATION
-        .left => {
-            if (document.mode == .COMMAND or document.mode == .SEARCH) {
-                if (editor_state.command_cursor_x > 1) editor_state.command_cursor_x -= 1;
-            } else {
-                if (document.cursor_x > 0) document.cursor_x -= 1;
-            }
-        },
-        .right => {
-            if (document.mode == .COMMAND or document.mode == .SEARCH) {
-                if (editor_state.command_cursor_x < editor_state.command_buffer.items.len) {
-                    editor_state.command_cursor_x += 1;
+    var repeat_amount: usize = 0;
+    while (repeat_amount < motion_count) : (repeat_amount += 1) {
+        switch (command) {
+            // NAVIGATION
+            .left => {
+                if (document.mode == .COMMAND or document.mode == .SEARCH) {
+                    if (editor_state.command_cursor_x > 1) editor_state.command_cursor_x -= 1;
+                } else {
+                    if (document.cursor_x > 0) document.cursor_x -= 1;
                 }
-            } else {
+            },
+            .right => {
+                if (document.mode == .COMMAND or document.mode == .SEARCH) {
+                    if (editor_state.command_cursor_x < editor_state.command_buffer.items.len) {
+                        editor_state.command_cursor_x += 1;
+                    }
+                } else {
+                    if (document.currentRow()) |row| {
+                        if (document.cursor_x + 1 < row.chars.items.len) document.cursor_x += 1;
+                    }
+                }
+            },
+            .up => {
+                if (document.cursor_y > 0) document.cursor_y -= 1;
+            },
+            .down => {
+                if (document.cursor_y + 1 < document.rows.items.len) document.cursor_y += 1;
+            },
+            .doc_start_gg => {
+                document.cursor_y = 0;
+            },
+            .document_end => {
+                if (document.rows.items.len > 0) document.cursor_y = document.rows.items.len - 1;
+            },
+            .first_char => {
+                if (std.mem.indexOfNone(u8, document.rows.items[document.cursor_y].render.items, " \t\r\n")) |pos| {
+                    document.cursor_x = pos;
+                } else {
+                    document.cursor_x = 0;
+                }
+            },
+            .line_start => {
+                document.cursor_x = 0;
+            },
+            .line_end => {
                 if (document.currentRow()) |row| {
-                    if (document.cursor_x + 1 < row.chars.items.len) document.cursor_x += 1;
+                    document.cursor_x = if (row.chars.items.len == 0) 0 else row.chars.items.len - 1;
+                } else {
+                    document.cursor_x = 0;
                 }
-            }
-        },
-        .up => {
-            if (document.cursor_y > 0) document.cursor_y -= 1;
-        },
-        .down => {
-            if (document.cursor_y + 1 < document.rows.items.len) document.cursor_y += 1;
-        },
-        .doc_start_gg => {
-            document.cursor_y = 0;
-        },
-        .document_end => {
-            if (document.rows.items.len > 0) document.cursor_y = document.rows.items.len - 1;
-        },
-        .first_char => {
-            if (std.mem.indexOfNone(u8, document.rows.items[document.cursor_y].render.items, " \t\r\n")) |pos| {
-                document.cursor_x = pos;
-            } else {
-                document.cursor_x = 0;
-            }
-        },
-        .line_start => {
-            document.cursor_x = 0;
-        },
-        .line_end => {
-            if (document.currentRow()) |row| {
-                document.cursor_x = if (row.chars.items.len == 0) 0 else row.chars.items.len - 1;
-            } else {
-                document.cursor_x = 0;
-            }
-        },
-        .top => {
-            document.cursor_y = document.row_offset;
-        },
-        .middle => {
-            document.cursor_y = document.row_offset + document.rows_shown / 2;
-        },
-        .bottom => {
-            document.cursor_y = document.row_offset + document.rows_shown - 1;
-        },
-        .page_down => {
-            if (document.cursor_y + document.rows_shown / 2 > document.rows.items.len) {
-                document.cursor_y = document.rows.items.len - 1;
-            } else {
-                document.cursor_y = document.cursor_y +| document.rows_shown / 2;
-            }
-        },
-        .page_up => {
-            document.cursor_y = document.cursor_y -| document.rows_shown / 2;
-        },
-        .next_word_start => {
-            document.moveForward(.partial, .start);
-        },
-        .next_word_end => {
-            document.moveForward(.partial, .end);
-        },
-        .last_word_start => {
-            document.moveBack(.partial);
-        },
-        .next_space_start => {
-            document.moveForward(.full, .start);
-        },
-        .next_space_end => {
-            document.moveForward(.full, .end);
-        },
-        .last_space_start => {
-            document.moveBack(.full);
-        },
-        .next_empty_row => {
-            document.jumpByParagraph(.forward);
-        },
-        .prev_empty_row => {
-            document.jumpByParagraph(.backward);
-        },
+            },
+            .top => {
+                document.cursor_y = document.row_offset;
+            },
+            .middle => {
+                document.cursor_y = document.row_offset + document.rows_shown / 2;
+            },
+            .bottom => {
+                document.cursor_y = document.row_offset + document.rows_shown - 1;
+            },
+            .page_down => {
+                if (document.cursor_y + document.rows_shown / 2 > document.rows.items.len) {
+                    document.cursor_y = document.rows.items.len - 1;
+                } else {
+                    document.cursor_y = document.cursor_y +| document.rows_shown / 2;
+                }
+            },
+            .page_up => {
+                document.cursor_y = document.cursor_y -| document.rows_shown / 2;
+            },
+            .next_word_start => {
+                document.moveForward(.partial, .start);
+            },
+            .next_word_end => {
+                document.moveForward(.partial, .end);
+            },
+            .last_word_start => {
+                document.moveBack(.partial);
+            },
+            .next_space_start => {
+                document.moveForward(.full, .start);
+            },
+            .next_space_end => {
+                document.moveForward(.full, .end);
+            },
+            .last_space_start => {
+                document.moveBack(.full);
+            },
+            .next_empty_row => {
+                document.jumpByParagraph(.forward);
+            },
+            .prev_empty_row => {
+                document.jumpByParagraph(.backward);
+            },
 
-        // MODES
-        .normal => {
-            if (document.mode == .SEARCH) {
-                document.cursor_x = editor_state.cursor_origin_x;
-                document.cursor_y = editor_state.cursor_origin_y;
-            }
-            editor_state.clearText(document);
-            editor_state.replace_mult = false;
-            editor_state.pending_motion_len = 0;
-        },
-        .visual => document.mode = .VISUAL,
-        .command => {
-            editor_state.clearText(document);
-            document.mode = .COMMAND;
-            // only append the ":" to the command line here
-            // the rest of the text is appended in .other
-            try editor_state.insertText(allocator, editor_state.command_cursor_x, ":");
-            editor_state.command_cursor_x += 1;
-        },
-        .search => {
-            editor_state.cursor_origin_x = document.cursor_x;
-            editor_state.cursor_origin_y = document.cursor_y;
-            editor_state.clearText(document);
-            document.mode = .SEARCH;
-            try editor_state.insertText(allocator, editor_state.command_cursor_x, "/");
-            editor_state.command_cursor_x += 1;
-        },
-        .search_next => {
-            if (editor_state.last_search.items.len != 0) {
-                const found = document.search(editor_state.last_search.items, document.cursor_y, document.cursor_x + 1, .forward);
+            // MODES
+            .normal => {
+                if (document.mode == .SEARCH) {
+                    document.cursor_x = editor_state.cursor_origin_x;
+                    document.cursor_y = editor_state.cursor_origin_y;
+                }
+                editor_state.clearText(document);
+                editor_state.replace_mult = false;
+                editor_state.pending_motion_len = 0;
+            },
+            .visual => document.mode = .VISUAL,
+            .command => {
+                editor_state.clearText(document);
+                document.mode = .COMMAND;
+                // only append the ":" to the command line here
+                // the rest of the text is appended in .other
+                try editor_state.insertText(allocator, editor_state.command_cursor_x, ":");
+                editor_state.command_cursor_x += 1;
+            },
+            .search => {
+                editor_state.cursor_origin_x = document.cursor_x;
+                editor_state.cursor_origin_y = document.cursor_y;
+                editor_state.clearText(document);
+                document.mode = .SEARCH;
+                try editor_state.insertText(allocator, editor_state.command_cursor_x, "/");
+                editor_state.command_cursor_x += 1;
+            },
+            .search_next => {
+                if (editor_state.last_search.items.len != 0) {
+                    const found = document.search(editor_state.last_search.items, document.cursor_y, document.cursor_x + 1, .forward);
+                    editor_state.invalid_search = !found;
+                }
+            },
+            .search_prev => {
+                if (editor_state.last_search.items.len != 0) {
+                    const found = document.search(editor_state.last_search.items, document.cursor_y, document.cursor_x, .backward);
+                    editor_state.invalid_search = !found;
+                }
+            },
+            .replace => {
+                document.mode = .REPLACE;
+            },
+            .replace_mult => {
+                document.mode = .REPLACE;
+                editor_state.replace_mult = true;
+            },
+            .run_search => {
+                const found = document.search(editor_state.command_buffer.items[1..], editor_state.cursor_origin_y, editor_state.cursor_origin_x, .forward);
+                try editor_state.setLastSearch(allocator);
+                editor_state.clearText(document);
                 editor_state.invalid_search = !found;
-            }
-        },
-        .search_prev => {
-            if (editor_state.last_search.items.len != 0) {
-                const found = document.search(editor_state.last_search.items, document.cursor_y, document.cursor_x, .backward);
-                editor_state.invalid_search = !found;
-            }
-        },
-        .replace => {
-            document.mode = .REPLACE;
-        },
-        .replace_mult => {
-            document.mode = .REPLACE;
-            editor_state.replace_mult = true;
-        },
-        .run_search => {
-            const found = document.search(editor_state.command_buffer.items[1..], editor_state.cursor_origin_y, editor_state.cursor_origin_x, .forward);
-            try editor_state.setLastSearch(allocator);
-            editor_state.clearText(document);
-            editor_state.invalid_search = !found;
-        },
-        .run_command => {
-            if (try runner.runCommand(editor_state, document, allocator)) return true;
-        },
+            },
+            .run_command => {
+                if (try runner.runCommand(editor_state, document, allocator)) return true;
+            },
 
-        // INSERTING TEXT
-        .insert_left => {
-            document.mode = .INSERT;
-        },
-        .insert_right => {
-            document.mode = .INSERT;
-            document.cursor_x = document.cursor_x +| 1;
-        },
-        .insert_start => {
-            document.mode = .INSERT;
-            document.cursor_x = 0;
-        },
-        .insert_end => {
-            document.mode = .INSERT;
-            document.cursor_x = document.currentRow().?.chars.items.len;
-        },
-        .carriage_return => {
-            try document.insertNewLine(allocator);
-        },
-        .tab => {
-            if (document.rows.items.len == 0) {
-                try document.insertRow(allocator, "", 0);
-            }
+            // INSERTING TEXT
+            .insert_left => {
+                document.mode = .INSERT;
+            },
+            .insert_right => {
+                document.mode = .INSERT;
+                document.cursor_x = document.cursor_x +| 1;
+            },
+            .insert_start => {
+                document.mode = .INSERT;
+                document.cursor_x = 0;
+            },
+            .insert_end => {
+                document.mode = .INSERT;
+                document.cursor_x = document.currentRow().?.chars.items.len;
+            },
+            .carriage_return => {
+                try document.insertNewLine(allocator);
+            },
+            .tab => {
+                if (document.rows.items.len == 0) {
+                    try document.insertRow(allocator, "", 0);
+                }
 
-            if (document.currentRow()) |row| {
-                const tab_width = 4 - (document.cursor_x % 4);
-                const spaces = try row.chars.addManyAt(allocator, document.cursor_x, tab_width);
-                @memset(spaces, ' ');
-                document.cursor_x += tab_width;
-                try document.rows.items[document.cursor_y].updateRender(allocator);
-            }
-        },
-        .new_line_up => {
-            try document.insertRow(allocator, "", document.cursor_y);
+                if (document.currentRow()) |row| {
+                    const tab_width = 4 - (document.cursor_x % 4);
+                    const spaces = try row.chars.addManyAt(allocator, document.cursor_x, tab_width);
+                    @memset(spaces, ' ');
+                    document.cursor_x += tab_width;
+                    try document.rows.items[document.cursor_y].updateRender(allocator);
+                }
+            },
+            .new_line_up => {
+                try document.insertRow(allocator, "", document.cursor_y);
 
-            if (document.rows.items.len != 0 and document.cursor_y != 0) {
-                const first_char = mem.indexOfNone(u8, document.rows.items[document.cursor_y - 1].chars.items, " \t") orelse document.rows.items[document.cursor_y - 1].chars.items.len;
-                try document.rows.items[document.cursor_y].insertText(allocator, 0, document.rows.items[document.cursor_y - 1].chars.items[0..first_char]);
+                if (document.rows.items.len != 0 and document.cursor_y != 0) {
+                    const first_char = mem.indexOfNone(u8, document.rows.items[document.cursor_y - 1].chars.items, " \t") orelse document.rows.items[document.cursor_y - 1].chars.items.len;
+                    try document.rows.items[document.cursor_y].insertText(allocator, 0, document.rows.items[document.cursor_y - 1].chars.items[0..first_char]);
 
-                if (mem.endsWith(u8, document.rows.items[document.cursor_y - 1].chars.items, "{")) {
-                    try document.rows.items[document.cursor_y].insertText(allocator, first_char, "\t");
+                    if (mem.endsWith(u8, document.rows.items[document.cursor_y - 1].chars.items, "{")) {
+                        try document.rows.items[document.cursor_y].insertText(allocator, first_char, "\t");
+                        document.cursor_x = first_char + 1;
+                    } else {
+                        document.cursor_x = first_char;
+                    }
+                }
+
+                document.mode = .INSERT;
+            },
+            .new_line_down => {
+                if (document.rows.items.len == 0) {
+                    try document.insertRow(allocator, "", document.cursor_y);
+                }
+                try document.insertRow(allocator, "", document.cursor_y + 1);
+
+                const first_char = mem.indexOfNone(u8, document.rows.items[document.cursor_y].chars.items, " \t") orelse document.rows.items[document.cursor_y].chars.items.len;
+
+                try document.rows.items[document.cursor_y + 1].insertText(allocator, 0, document.rows.items[document.cursor_y].chars.items[0..first_char]);
+                if (mem.endsWith(u8, document.rows.items[document.cursor_y].chars.items, "{")) {
+                    try document.rows.items[document.cursor_y + 1].insertText(allocator, first_char, "\t");
                     document.cursor_x = first_char + 1;
                 } else {
                     document.cursor_x = first_char;
                 }
-            }
 
-            document.mode = .INSERT;
-        },
-        .new_line_down => {
-            if (document.rows.items.len == 0) {
-                try document.insertRow(allocator, "", document.cursor_y);
-            }
-            try document.insertRow(allocator, "", document.cursor_y + 1);
+                document.cursor_y += 1;
+                document.mode = .INSERT;
+            },
 
-            const first_char = mem.indexOfNone(u8, document.rows.items[document.cursor_y].chars.items, " \t") orelse document.rows.items[document.cursor_y].chars.items.len;
+            // MANIPULATING TEXT
+            .join_next_line => {
+                try document.joinWithNextRow(allocator);
+            },
+            .substitute_char => {
+                document.mode = .INSERT;
 
-            try document.rows.items[document.cursor_y + 1].insertText(allocator, 0, document.rows.items[document.cursor_y].chars.items[0..first_char]);
-            if (mem.endsWith(u8, document.rows.items[document.cursor_y].chars.items, "{")) {
-                try document.rows.items[document.cursor_y + 1].insertText(allocator, first_char, "\t");
-                document.cursor_x = first_char + 1;
-            } else {
-                document.cursor_x = first_char;
-            }
-
-            document.cursor_y += 1;
-            document.mode = .INSERT;
-        },
-
-        // MANIPULATING TEXT
-        .join_next_line => {
-            try document.joinWithNextRow(allocator);
-        },
-        .substitute_char => {
-            document.mode = .INSERT;
-
-            if (document.currentRow()) |row| {
-                if (document.cursor_x != 0) {
-                    try row.removeByte(document.cursor_x - 1, allocator);
-                    document.cursor_x -= 1;
+                if (document.currentRow()) |row| {
+                    if (document.cursor_x != 0) {
+                        try row.removeByte(document.cursor_x - 1, allocator);
+                        document.cursor_x -= 1;
+                    } else {
+                        if (row.chars.items.len != 0) {
+                            try row.removeByte(document.cursor_x, allocator);
+                        }
+                    }
+                }
+            },
+            .substitute_line => {
+                if (document.currentRow()) |row| {
+                    row.chars.clearRetainingCapacity();
+                    try row.updateRender(allocator);
+                    document.mode = .INSERT;
                 } else {
-                    if (row.chars.items.len != 0) {
+                    document.mode = .INSERT;
+                }
+            },
+
+            // DELETING TEXT
+            .delete_left => {
+                if (document.mode == .COMMAND) {
+                    if (editor_state.command_cursor_x > 1) {
+                        editor_state.removeByte(editor_state.command_cursor_x - 1);
+                        editor_state.command_cursor_x -= 1;
+                    }
+                } else if (document.mode == .SEARCH) {
+                    if (editor_state.command_cursor_x > 1) {
+                        editor_state.removeByte(editor_state.command_cursor_x - 1);
+                        editor_state.command_cursor_x -= 1;
+                    }
+                    _ = document.search(editor_state.command_buffer.items[1..], editor_state.cursor_origin_y, editor_state.cursor_origin_x, .forward);
+                } else if (document.cursor_x != 0) {
+                    if (document.currentRow()) |row| {
+                        try row.removeByte(document.cursor_x - 1, allocator);
+                        document.cursor_x -= 1;
+                    }
+                } else {
+                    if (document.mode == .INSERT) {
+                        try document.joinWithPrevRow(allocator);
+                    }
+                }
+            },
+            .delete_current => {
+                if (document.currentRow()) |row| {
+                    if (document.cursor_x < row.chars.items.len) {
                         try row.removeByte(document.cursor_x, allocator);
                     }
                 }
-            }
-        },
-        .substitute_line => {
-            if (document.currentRow()) |row| {
-                row.chars.clearRetainingCapacity();
-                try row.updateRender(allocator);
-                document.mode = .INSERT;
-            } else {
-                document.mode = .INSERT;
-            }
-        },
+            },
+            .delete_line => {
+                try document.removeRow(allocator, document.cursor_y);
+                if (document.rows.items.len == 0) {
+                    document.cursor_y = 0;
+                } else if (document.cursor_y >= document.rows.items.len) {
+                    document.cursor_y = document.cursor_y -| 1;
+                }
+            },
+            .delete_line_remaining => {
+                try document.deleteRemainingLine(allocator);
+            },
 
-        // DELETING TEXT
-        .delete_left => {
-            if (document.mode == .COMMAND) {
-                if (editor_state.command_cursor_x > 1) {
-                    editor_state.removeByte(editor_state.command_cursor_x - 1);
-                    editor_state.command_cursor_x -= 1;
-                }
-            } else if (document.mode == .SEARCH) {
-                if (editor_state.command_cursor_x > 1) {
-                    editor_state.removeByte(editor_state.command_cursor_x - 1);
-                    editor_state.command_cursor_x -= 1;
-                }
-                _ = document.search(editor_state.command_buffer.items[1..], editor_state.cursor_origin_y, editor_state.cursor_origin_x, .forward);
-            } else if (document.cursor_x != 0) {
-                if (document.currentRow()) |row| {
-                    try row.removeByte(document.cursor_x - 1, allocator);
-                    document.cursor_x -= 1;
-                }
-            } else {
+            .other => {
                 if (document.mode == .INSERT) {
-                    try document.joinWithPrevRow(allocator);
-                }
-            }
-        },
-        .delete_current => {
-            if (document.currentRow()) |row| {
-                if (document.cursor_x < row.chars.items.len) {
-                    try row.removeByte(document.cursor_x, allocator);
-                }
-            }
-        },
-        .delete_line => {
-            try document.removeRow(allocator, document.cursor_y);
-            if (document.rows.items.len == 0) {
-                document.cursor_y = 0;
-            } else if (document.cursor_y >= document.rows.items.len) {
-                document.cursor_y = document.cursor_y -| 1;
-            }
-        },
-        .delete_line_remaining => {
-            try document.deleteRemainingLine(allocator);
-        },
-
-        .other => {
-            if (document.mode == .INSERT) {
-                if (key.text) |text| {
-                    try document.insertText(allocator, text);
-                }
-            } else if (document.mode == .COMMAND) {
-                if (key.text) |text| {
-                    try editor_state.insertText(allocator, editor_state.command_cursor_x, text);
-                    editor_state.command_cursor_x += text.len;
-                }
-            } else if (document.mode == .REPLACE) {
-                if (key.text) |text| {
-                    if (editor_state.replace_mult) {
-                        try document.replaceChar(allocator, text, document.cursor_x);
-                        document.cursor_x += 1;
-                    } else {
-                        try document.replaceChar(allocator, text, document.cursor_x);
-                        document.mode = .NORMAL;
+                    if (key.text) |text| {
+                        try document.insertText(allocator, text);
+                    }
+                } else if (document.mode == .COMMAND) {
+                    if (key.text) |text| {
+                        try editor_state.insertText(allocator, editor_state.command_cursor_x, text);
+                        editor_state.command_cursor_x += text.len;
+                    }
+                } else if (document.mode == .REPLACE) {
+                    if (key.text) |text| {
+                        if (editor_state.replace_mult) {
+                            try document.replaceChar(allocator, text, document.cursor_x);
+                            document.cursor_x += 1;
+                        } else {
+                            try document.replaceChar(allocator, text, document.cursor_x);
+                            document.mode = .NORMAL;
+                        }
+                    }
+                } else if (document.mode == .SEARCH) {
+                    if (key.text) |text| {
+                        try editor_state.insertText(allocator, editor_state.command_cursor_x, text);
+                        editor_state.command_cursor_x += text.len;
+                        _ = document.search(editor_state.command_buffer.items[1..], editor_state.cursor_origin_y, editor_state.cursor_origin_x, .forward);
                     }
                 }
-            } else if (document.mode == .SEARCH) {
-                if (key.text) |text| {
-                    try editor_state.insertText(allocator, editor_state.command_cursor_x, text);
-                    editor_state.command_cursor_x += text.len;
-                    _ = document.search(editor_state.command_buffer.items[1..], editor_state.cursor_origin_y, editor_state.cursor_origin_x, .forward);
-                }
-            }
-        },
+            },
+        }
     }
 
     if (command != .other) {
         editor_state.pending_motion_len = 0;
+        editor_state.pending_motion_count = 1;
     }
 
     document.clampCursorX();
