@@ -265,6 +265,23 @@ pub const Editor = struct {
         }
     }
 
+    pub fn clampCursorX(self: *Editor) void {
+        const row = self.currentRow() orelse {
+            self.cursor_x = 0;
+            return;
+        };
+
+        if (row.chars.items.len == 0) {
+            self.cursor_x = 0;
+        } else if (self.cursor_x >= row.chars.items.len) {
+            if (self.mode == .NORMAL) {
+                self.cursor_x = row.chars.items.len - 1;
+            } else {
+                self.cursor_x = row.chars.items.len;
+            }
+        }
+    }
+
     pub fn toOwnedText(self: *const Editor, allocator: mem.Allocator) ![]u8 {
         var list: std.ArrayList(u8) = .empty;
         errdefer list.deinit(allocator);

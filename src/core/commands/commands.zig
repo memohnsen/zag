@@ -80,8 +80,8 @@ pub fn handleKey(
     if (document.mode == .NORMAL) {
         if (key.text) |text| {
             editor_state.appendKeyToBuffer(text[0]);
-            // remove all special chars so its only u8
         } else if (key.codepoint >= ' ' and key.codepoint <= '~') {
+            // remove all special chars so its only u8
             editor_state.appendKeyToBuffer(@intCast(key.codepoint));
         }
     }
@@ -411,25 +411,8 @@ pub fn handleKey(
         editor_state.pending_motion_len = 0;
     }
 
-    clampCursorX(document);
+    document.clampCursorX();
     return false;
-}
-
-fn clampCursorX(document: *editor.Editor) void {
-    const row = document.currentRow() orelse {
-        document.cursor_x = 0;
-        return;
-    };
-
-    if (row.chars.items.len == 0) {
-        document.cursor_x = 0;
-    } else if (document.cursor_x >= row.chars.items.len) {
-        if (document.mode == .NORMAL) {
-            document.cursor_x = row.chars.items.len - 1;
-        } else {
-            document.cursor_x = row.chars.items.len;
-        }
-    }
 }
 
 // -------------------------------------------------------
