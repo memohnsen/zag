@@ -1,8 +1,9 @@
 const std = @import("std");
 const testing = std.testing;
 const vaxis = @import("vaxis");
-const editor = @import("core/editor/editor.zig");
-const state = @import("core/editor/state.zig");
+const editor = @import("../core/editor/editor.zig");
+const state = @import("../core/editor/state.zig");
+const editor_theme = @import("theme.zig");
 
 const welcome_text = "Zag Editor -- Version 0.1.0";
 
@@ -20,11 +21,12 @@ pub fn refresh(
     document: *const editor.Editor,
     editor_state: *const state.State,
     buffers: *Buffers,
+    theme: *const editor_theme.Theme,
 ) !void {
     const window = vx.window();
     window.clear();
-    drawRows(window, document, editor_state, buffers);
-    try drawStatusBar(window, document, &buffers.status, &buffers.cursor);
+    drawRows(window, document, editor_state, buffers, theme);
+    try drawStatusBar(window, document, &buffers.status, &buffers.cursor, theme);
     try drawCommandBar(window, editor_state, &buffers.command, &buffers.key_input);
 
     var screen_x: usize = 0;
@@ -46,6 +48,7 @@ fn drawRows(
     document: *const editor.Editor,
     editor_state: *const state.State,
     buffers: *Buffers,
+    theme: *const editor_theme.Theme,
 ) void {
     const query: ?[]const u8 =
         if (document.mode == .SEARCH and editor_state.command_buffer.items.len > 1)
@@ -82,31 +85,21 @@ fn drawRows(
                 .relative => {
                     line_number = std.fmt.bufPrint(
                         buffers.line_numbers[screen_row][0..],
-                        " {d} ",
+                        " {d:2} ",
                         .{displayRelativeLineNumber(document, file_row)},
                     ) catch unreachable;
                 },
                 .normal => {
                     line_number = std.fmt.bufPrint(
                         buffers.line_numbers[screen_row][0..],
-                        " {d} ",
+                        " {d:2} ",
                         .{file_row + 1},
                     ) catch unreachable;
                 },
             }
 
-            printGutter(
-                gutter_window,
-                line_number,
-                screen_row,
-                0,
-            );
-            printAt(
-                text_window,
-                chars[start..],
-                screen_row,
-                0,
-            );
+            printGutter(gutter_window, line_number, screen_row, 0, theme);
+            printAt(text_window, chars[start..], screen_row, 0, theme);
 
             if (file_row == document.cursor_y and
                 query != null and
@@ -124,7 +117,6 @@ fn drawRows(
                     _ = text_window.printSegment(
                         .{
                             .text = row.render.items[visible_start..visible_end],
-                            .style = .{ .reverse = true },
                         },
                         .{
                             .row_offset = @intCast(screen_row),
@@ -139,14 +131,9 @@ fn drawRows(
         }
 
         if (document.rows.items.len == 0 and screen_row == text_height / 3) {
-            drawWelcome(text_window, screen_row);
+            drawWelcome(text_window, screen_row, theme);
         } else {
-            printAt(
-                gutter_window,
-                "~",
-                screen_row,
-                0,
-            );
+            printAt(gutter_window, "~", screen_row, 0, theme);
         }
     }
 }
@@ -156,6 +143,7 @@ fn drawStatusBar(
     document: *const editor.Editor,
     file_buf: []u8,
     cursor_buf: []u8,
+    theme: *const editor_theme.Theme,
 ) !void {
     if (window.height == 0) {
         return;
@@ -165,7 +153,7 @@ fn drawStatusBar(
         .y_off = @intCast(window.height -| 2),
         .height = 1,
     });
-    status_window.fill(.{ .style = .{ .reverse = true } });
+    status_window.fill(.{ .style = .{ .bg = theme.status_bg } });
 
     // Show filename and lines in file
     const file: []const u8 = if (document.filename) |name| name else "[No File]";
@@ -182,7 +170,10 @@ fn drawStatusBar(
     };
     _ = status_window.printSegment(.{
         .text = file_text,
-        .style = .{ .reverse = true },
+        .style = .{
+            .bg = theme.status_bg,
+            .fg = theme.status_fg,
+        },
     }, .{ .wrap = .none });
 
     // Show cursor position
@@ -194,7 +185,10 @@ fn drawStatusBar(
     const text_col = status_window.width -| text_width;
     _ = status_window.printSegment(.{
         .text = cursor_text,
-        .style = .{ .reverse = true },
+        .style = .{
+            .bg = theme.status_bg,
+            .fg = theme.status_fg,
+        },
     }, .{
         .wrap = .none,
         .col_offset = text_col,
@@ -240,12 +234,12 @@ fn drawCommandBar(
     });
 }
 
-fn drawWelcome(window: vaxis.Window, screen_row: usize) void {
-    printAt(window, "~", screen_row, 0);
+fn drawWelcome(window: vaxis.Window, screen_row: usize, theme: *const editor_theme.Theme) void {
+    printAt(window, "~", screen_row, 0, theme);
 
     const visible_len = @min(welcome_text.len, @as(usize, window.width));
     const padding = (@as(usize, window.width) - visible_len) / 2;
-    printAt(window, welcome_text[0..visible_len], screen_row, padding);
+    printAt(window, welcome_text[0..visible_len], screen_row, padding, theme);
 }
 
 fn printAt(
@@ -253,9 +247,13 @@ fn printAt(
     text: []const u8,
     row: usize,
     col: usize,
+    theme: *const editor_theme.Theme,
 ) void {
     _ = window.printSegment(
-        .{ .text = text },
+        .{
+            .text = text,
+            .style = .{ .fg = theme.text_fg },
+        },
         .{
             .row_offset = @intCast(row),
             .col_offset = @intCast(col),
@@ -269,11 +267,16 @@ fn printGutter(
     text: []const u8,
     row: usize,
     col: usize,
+    theme: *const editor_theme.Theme,
 ) void {
     _ = window.printSegment(
         .{
             .text = text,
-            .style = .{ .dim = true },
+            .style = .{
+                .dim = true,
+                .bg = theme.gutter_bg,
+                .fg = theme.gutter_fg,
+            },
         },
         .{
             .row_offset = @intCast(row),

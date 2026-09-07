@@ -4,7 +4,8 @@ const ohsnap = @import("ohsnap");
 const vaxis = @import("vaxis");
 const editor = @import("../core/editor/editor.zig");
 const state = @import("../core/editor/state.zig");
-const ui = @import("../ui.zig");
+const ui = @import("../ui/ui.zig");
+const editor_theme = @import("../ui/theme.zig");
 
 const TestScreen = struct {
     allocator: std.mem.Allocator,
@@ -12,6 +13,7 @@ const TestScreen = struct {
     output_buffer: [16384]u8,
     output: std.Io.Writer,
     ui_buffers: ui.Buffers,
+    theme: editor_theme.Theme,
     vx: vaxis.Vaxis,
 
     fn init(self: *TestScreen, allocator: std.mem.Allocator, io: std.Io) !void {
@@ -20,6 +22,7 @@ const TestScreen = struct {
         errdefer self.env_map.deinit();
         self.output = std.Io.Writer.fixed(&self.output_buffer);
         self.ui_buffers = .{};
+        self.theme = .{};
         self.vx = try vaxis.init(io, allocator, &self.env_map, .{});
         errdefer self.vx.deinit(allocator, &self.output);
         try self.vx.resize(allocator, &self.output, .{
@@ -70,6 +73,7 @@ test "base welcome screen" {
         &document,
         &editor_state,
         &test_screen.ui_buffers,
+        &test_screen.theme,
     );
 
     var screen: std.ArrayList(u8) = .empty;
@@ -129,6 +133,7 @@ test "welcome screen in insert mode with text" {
         &document,
         &editor_state,
         &test_screen.ui_buffers,
+        &test_screen.theme,
     );
 
     var screen: std.ArrayList(u8) = .empty;
@@ -192,6 +197,7 @@ test "file screen with rows and filename" {
         &document,
         &editor_state,
         &test_screen.ui_buffers,
+        &test_screen.theme,
     );
 
     var screen: std.ArrayList(u8) = .empty;
@@ -250,6 +256,7 @@ test "command mode shows buffer in command bar" {
         &document,
         &editor_state,
         &test_screen.ui_buffers,
+        &test_screen.theme,
     );
 
     var screen: std.ArrayList(u8) = .empty;
@@ -311,6 +318,7 @@ test "search mode shows query and cursor on match" {
         &document,
         &editor_state,
         &test_screen.ui_buffers,
+        &test_screen.theme,
     );
 
     var screen: std.ArrayList(u8) = .empty;
@@ -375,6 +383,7 @@ test "long file scrolls to keep cursor on screen" {
         &document,
         &editor_state,
         &test_screen.ui_buffers,
+        &test_screen.theme,
     );
 
     var screen: std.ArrayList(u8) = .empty;

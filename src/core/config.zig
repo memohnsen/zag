@@ -1,5 +1,6 @@
 const std = @import("std");
 const mem = std.mem;
+const editor_theme = @import("../ui/theme.zig");
 
 const LineNumbers = enum {
     normal,
@@ -9,6 +10,7 @@ const LineNumbers = enum {
 pub const Config = struct {
     scroll_buffer: u16 = 5,
     line_numbers: LineNumbers = .relative,
+    theme: editor_theme.ThemeName = .black_and_white,
 
     // do this anytime the editor is open
     pub fn readConfig(
@@ -49,11 +51,15 @@ pub const Config = struct {
 
             const trimmed = mem.trim(u8, line, " ");
             if (mem.startsWith(u8, trimmed, "scroll_buffer = ")) {
-                const val = std.fmt.parseInt(u16, line[16..], 10) catch 5;
+                const val = std.fmt.parseInt(u16, line["scroll_buffer = ".len..], 10) catch 5;
                 self.scroll_buffer = val;
                 continue;
             } else if (mem.startsWith(u8, trimmed, "line_numbers = ")) {
                 self.line_numbers = std.meta.stringToEnum(LineNumbers, trimmed) orelse .relative;
+                continue;
+            } else if (mem.startsWith(u8, trimmed, "theme = ")) {
+                const theme_name = editor_theme.themeName(trimmed["theme = ".len..]);
+                self.theme = theme_name;
                 continue;
             }
         }
@@ -97,22 +103,14 @@ pub const Config = struct {
         var buf: [256]u8 = undefined;
         const file_text = try std.fmt.bufPrint(
             &buf,
-            "[editor]\nscroll_buffer = {d}\nline_numbers = \"{s}\"",
+            "[editor]\nscroll_buffer = {d}\nline_numbers = \"{s}\"\ntheme = \"{s}\"",
             .{
                 self.scroll_buffer,
                 @tagName(self.line_numbers),
+                @tagName(self.theme),
             },
         );
 
         try file.writeStreamingAll(io, file_text);
     }
-
-    // TODO: when a new flag has been added to the config add that as a new line in the config file commented out
-    // do not edit any other lines of the file
-    // pub fn addNewFlags(
-    //     self: *const Config,
-    //     allocator: mem.Allocator,
-    //     io: std.Io,
-    //     home_dir: []const u8,
-    // ) !void {}
 };

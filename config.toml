@@ -3,3 +3,5 @@
 scroll_buffer = 5
 # relative or normal
 line_numbers = "relative"
+# black_and_white, ocean, amber, forest, rose, slate, paper, violet
+theme = "Black and White"

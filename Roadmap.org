@@ -1,9 +1,9 @@
 * Roadmap for Zag
-- [ ] base themes
+- [ ] custom user themes
 - [ ] text viewer in side bar
 - [ ] windows
-- [ ] Add text highlighting
 - [ ] Add treesitter
+- [ ] Add text highlighting
 - [ ] undo redo
 - [ ] file tab line
 - [ ] integrated terminal

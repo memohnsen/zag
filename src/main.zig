@@ -2,7 +2,8 @@ const std = @import("std");
 const log = std.log;
 
 const vaxis = @import("vaxis");
-const ui = @import("ui.zig");
+const ui = @import("ui/ui.zig");
+const editor_theme = @import("ui/theme.zig");
 const editor = @import("core/editor/editor.zig");
 const commands = @import("core/commands/commands.zig");
 const state = @import("core/editor/state.zig");
@@ -60,6 +61,8 @@ fn run(init: std.process.Init) !void {
     defer editor_state.deinit(gpa);
 
     var ui_buffers: ui.Buffers = .{};
+    var theme: editor_theme.Theme = .{};
+    theme.applyTheme(&editor_settings);
 
     while (true) {
         const event = try event_loop.nextEvent();
@@ -86,9 +89,9 @@ fn run(init: std.process.Init) !void {
         const text_height = window.height -| 2;
         document.scroll(text_height, window.width);
         editor_state.hideNotification(&document, io);
-        try ui.refresh(&vx, tty.writer(), &document, &editor_state, &ui_buffers);
+        try ui.refresh(&vx, tty.writer(), &document, &editor_state, &ui_buffers, &theme);
         // subtract 2 lines due to command and status bar
-        document.rows_shown = vx.window().height - 2;
+        document.rows_shown = vx.window().height -| 2;
     }
 }
 
@@ -147,7 +150,7 @@ fn handleArgs(
 test "all" {
     _ = @import("core/commands/commands.zig");
     _ = @import("core/editor/editor.zig");
-    _ = @import("ui.zig");
+    _ = @import("ui/ui.zig");
     _ = @import("core/editor/row.zig");
     _ = @import("core/editor/state.zig");
     _ = @import("notifications.zig");
