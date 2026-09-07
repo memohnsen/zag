@@ -7,9 +7,6 @@ const commands = @import("commands.zig");
 const editor = @import("../editor/editor.zig");
 const state = @import("../editor/state.zig");
 
-// all keypresses are stored now in editor state so they can be parsed for multi digit commands
-// Matcher decides: complete → run and clear; prefix of something (3, 3g, d, gg waiting, f) → keep; invalid → beep/clear
-// Parse the count from the chord when you execute
 pub fn keyActionParser(key: vaxis.Key, document: *editor.Editor, editor_state: *state.State) commands.Command {
     if (document.mode == .NORMAL) {
         if (key.matches('d', .{ .ctrl = true })) return .page_down;
