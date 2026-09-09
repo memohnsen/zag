@@ -33,6 +33,7 @@ fn run(init: std.process.Init) !void {
     };
     try editor_settings.writeConfig(gpa, io, home_dir);
     try editor_settings.readConfig(gpa, io, home_dir);
+    defer editor_settings.deinit(gpa);
 
     var document = editor.Editor{ .config = editor_settings };
     defer document.deinit(gpa);
@@ -62,7 +63,7 @@ fn run(init: std.process.Init) !void {
 
     var ui_buffers: ui.Buffers = .{};
     var theme: editor_theme.Theme = .{};
-    theme.applyTheme(&editor_settings);
+    theme.applyTheme(&editor_settings, io, gpa, home_dir);
 
     while (true) {
         const event = try event_loop.nextEvent();

@@ -1,0 +1,6 @@
+[theme]
+gutter_bg = "#000000"
+gutter_fg = "#FFFFFF"
+status_bg = "#FFFFFF"
+status_fg = "#000000"
+text_fg = "#FFFFFF"

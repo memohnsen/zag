@@ -5,6 +5,24 @@ const testing = std.testing;
 const vaxis = @import("vaxis");
 
 const config = @import("../core/config.zig");
+const built_ins = @import("built_ins.zig");
+
+const Rgb = struct {
+    r: u8,
+    g: u8,
+    b: u8,
+};
+
+pub const ThemeName = union(enum) {
+    black_and_white,
+    ocean,
+    amber,
+    forest,
+    rose,
+    slate,
+    violet,
+    custom: []const u8,
+};
 
 pub const Theme = struct {
     gutter_bg: vaxis.Color = rgb(0, 0, 0),
@@ -13,86 +31,108 @@ pub const Theme = struct {
     status_fg: vaxis.Color = rgb(0, 0, 0),
     text_fg: vaxis.Color = rgb(255, 255, 255),
 
-    pub fn applyTheme(self: *Theme, editor_settings: *const config.Config) void {
-        self.* = switch (editor_settings.theme) {
-            .black_and_white => black_and_white,
-            .ocean => ocean,
-            .amber => amber,
-            .forest => forest,
-            .rose => rose,
-            .slate => slate,
-            .violet => violet,
+    pub fn applyTheme(
+        self: *Theme,
+        editor_settings: *const config.Config,
+        io: std.Io,
+        allocator: mem.Allocator,
+        home_dir: []const u8,
+    ) void {
+        self.* = switch (themeName(editor_settings.theme)) {
+            .black_and_white => built_ins.black_and_white,
+            .ocean => built_ins.ocean,
+            .amber => built_ins.amber,
+            .forest => built_ins.forest,
+            .rose => built_ins.rose,
+            .slate => built_ins.slate,
+            .violet => built_ins.violet,
+            .custom => loadCustomTheme(io, allocator, home_dir, editor_settings) catch built_ins.black_and_white,
         };
     }
 };
 
-pub const ThemeName = enum {
-    black_and_white,
-    ocean,
-    amber,
-    forest,
-    rose,
-    slate,
-    violet,
-};
+pub fn loadCustomTheme(
+    io: std.Io,
+    allocator: mem.Allocator,
+    home_dir: []const u8,
+    editor_settings: *const config.Config,
+) !Theme {
+    // TODO: store custom themes in ~/.config/zag/themes/FILENAME.toml
+    // if theme is not built in then we find the file that matches that theme, must match FILENAME
+    // iter through file to get vals and set theme to those
 
-const black_and_white: Theme = .{
-    .gutter_bg = rgb(0, 0, 0),
-    .gutter_fg = rgb(180, 180, 180),
-    .status_bg = rgb(220, 220, 220),
-    .status_fg = rgb(0, 0, 0),
-    .text_fg = rgb(255, 255, 255),
-};
+    const file_name = try std.fmt.allocPrint(allocator, "{s}.toml", .{editor_settings.theme});
+    defer allocator.free(file_name);
+    const file_path = try std.fs.path.join(allocator, &.{
+        home_dir,
+        ".config",
+        "zag",
+        "themes",
+        file_name,
+    });
+    defer allocator.free(file_path);
 
-const ocean: Theme = .{
-    .gutter_bg = rgb(15, 23, 42),
-    .gutter_fg = rgb(125, 211, 252),
-    .status_bg = rgb(30, 58, 138),
-    .status_fg = rgb(226, 232, 240),
-    .text_fg = rgb(191, 219, 254),
-};
+    const file = try std.Io.Dir.openFileAbsolute(
+        io,
+        file_path,
+        .{},
+    );
+    defer file.close(io);
 
-const amber: Theme = .{
-    .gutter_bg = rgb(28, 16, 5),
-    .gutter_fg = rgb(251, 191, 36),
-    .status_bg = rgb(180, 83, 9),
-    .status_fg = rgb(255, 251, 235),
-    .text_fg = rgb(253, 230, 138),
-};
+    var read_buffer: [4096]u8 = undefined;
+    var file_reader = file.reader(io, &read_buffer);
 
-const forest: Theme = .{
-    .gutter_bg = rgb(8, 20, 12),
-    .gutter_fg = rgb(134, 239, 172),
-    .status_bg = rgb(22, 101, 52),
-    .status_fg = rgb(240, 253, 244),
-    .text_fg = rgb(187, 247, 208),
-};
+    const contents = try file_reader.interface.allocRemaining(
+        allocator,
+        .unlimited,
+    );
+    defer allocator.free(contents);
 
-const rose: Theme = .{
-    .gutter_bg = rgb(24, 9, 14),
-    .gutter_fg = rgb(251, 113, 133),
-    .status_bg = rgb(159, 18, 57),
-    .status_fg = rgb(255, 228, 230),
-    .text_fg = rgb(254, 205, 211),
-};
+    var gutter_bg: Rgb = undefined;
+    var gutter_fg: Rgb = undefined;
+    var status_bg: Rgb = undefined;
+    var status_fg: Rgb = undefined;
+    var text_fg: Rgb = undefined;
 
-const slate: Theme = .{
-    .gutter_bg = rgb(15, 17, 21),
-    .gutter_fg = rgb(148, 163, 184),
-    .status_bg = rgb(51, 65, 85),
-    .status_fg = rgb(241, 245, 249),
-    .text_fg = rgb(203, 213, 225),
-};
+    var lines = mem.splitScalar(u8, contents, '\n');
+    while (lines.next()) |line| {
+        if (mem.eql(u8, line, "[theme]")) {
+            continue;
+        }
 
-const violet: Theme = .{
-    .gutter_bg = rgb(18, 12, 28),
-    .gutter_fg = rgb(196, 181, 253),
-    .status_bg = rgb(91, 33, 182),
-    .status_fg = rgb(245, 243, 255),
-    .text_fg = rgb(221, 214, 254),
-};
+        const trimmed = mem.trim(u8, line, " ");
+        if (mem.startsWith(u8, trimmed, "gutter_bg = ")) {
+            gutter_bg = try hexToRgb(trimmed["gutter_bg = ".len..]);
+            continue;
+        }
+        if (mem.startsWith(u8, trimmed, "gutter_fg = ")) {
+            gutter_fg = try hexToRgb(trimmed["gutter_fg = ".len..]);
+            continue;
+        }
+        if (mem.startsWith(u8, trimmed, "status_bg = ")) {
+            status_bg = try hexToRgb(trimmed["status_bg = ".len..]);
+            continue;
+        }
+        if (mem.startsWith(u8, trimmed, "status_fg = ")) {
+            status_fg = try hexToRgb(trimmed["status_fg = ".len..]);
+            continue;
+        }
+        if (mem.startsWith(u8, trimmed, "text_fg = ")) {
+            text_fg = try hexToRgb(trimmed["text_fg = ".len..]);
+            continue;
+        }
+    }
 
-fn rgb(r: u8, g: u8, b: u8) vaxis.Color {
+    return Theme{
+        .gutter_bg = rgb(gutter_bg.r, gutter_bg.b, gutter_bg.g),
+        .gutter_fg = rgb(gutter_fg.r, gutter_fg.b, gutter_fg.g),
+        .status_bg = rgb(status_bg.r, status_bg.b, status_bg.g),
+        .status_fg = rgb(status_fg.r, status_fg.b, status_fg.g),
+        .text_fg = rgb(text_fg.r, text_fg.b, text_fg.g),
+    };
+}
+
+pub fn rgb(r: u8, g: u8, b: u8) vaxis.Color {
     return .{ .rgb = .{
         r,
         g,
@@ -100,7 +140,29 @@ fn rgb(r: u8, g: u8, b: u8) vaxis.Color {
     } };
 }
 
-pub fn themeName(name: []const u8) ThemeName {
+fn hexToRgb(hex: []const u8) !Rgb {
+    const trimmed = mem.trim(u8, hex, "\"");
+    var start: usize = 0;
+    if (trimmed.len > 0 and trimmed[0] == '#') {
+        start = 1;
+    }
+
+    if (trimmed.len - start != 6) {
+        return error.InvalidHexLength;
+    }
+
+    const r = try std.fmt.parseInt(u8, trimmed[start .. start + 2], 16);
+    const g = try std.fmt.parseInt(u8, trimmed[start + 2 .. start + 4], 16);
+    const b = try std.fmt.parseInt(u8, trimmed[start + 4 .. start + 6], 16);
+
+    return Rgb{
+        .r = r,
+        .g = g,
+        .b = b,
+    };
+}
+
+fn themeName(name: []const u8) ThemeName {
     const trimmed = mem.trim(u8, name, " \"");
     if (mem.eql(u8, trimmed, "ocean")) return .ocean;
     if (mem.eql(u8, trimmed, "amber")) return .amber;
@@ -108,11 +170,14 @@ pub fn themeName(name: []const u8) ThemeName {
     if (mem.eql(u8, trimmed, "rose")) return .rose;
     if (mem.eql(u8, trimmed, "slate")) return .slate;
     if (mem.eql(u8, trimmed, "violet")) return .violet;
-    return .black_and_white;
+    if (mem.eql(u8, trimmed, "black_and_white")) return .black_and_white;
+
+    return .{ .custom = name };
 }
 
 test "applyTheme sets ocean palette" {
     var theme: Theme = .{};
+    const ocean = built_ins.ocean;
     const settings = config.Config{ .theme = "Ocean" };
     theme.applyTheme(&settings);
     try testing.expect(theme.gutter_bg.eql(ocean.gutter_bg));
@@ -122,10 +187,12 @@ test "applyTheme sets ocean palette" {
 
 test "applyTheme strips quotes and falls back" {
     var theme: Theme = .{};
+    const amber = built_ins.amber;
     var amber_settings = config.Config{ .theme = "\"Amber\"" };
     theme.applyTheme(&amber_settings);
     try testing.expect(theme.status_fg.eql(amber.status_fg));
 
+    const black_and_white = built_ins.black_and_white;
     var unknown = config.Config{ .theme = "not a theme" };
     theme.applyTheme(&unknown);
     try testing.expect(theme.gutter_bg.eql(black_and_white.gutter_bg));

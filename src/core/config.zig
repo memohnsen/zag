@@ -1,5 +1,6 @@
 const std = @import("std");
 const mem = std.mem;
+
 const editor_theme = @import("../ui/theme.zig");
 
 const LineNumbers = enum {
@@ -10,8 +11,13 @@ const LineNumbers = enum {
 pub const Config = struct {
     scroll_buffer: u16 = 5,
     line_numbers: LineNumbers = .relative,
-    theme: editor_theme.ThemeName = .black_and_white,
+    theme: []const u8 = "black_and_white",
 
+    pub fn deinit(self: *Config, allocator: mem.Allocator) void {
+        allocator.free(self.theme);
+    }
+
+    // TODO: add tests for this
     // do this anytime the editor is open
     pub fn readConfig(
         self: *Config,
@@ -58,8 +64,8 @@ pub const Config = struct {
                 self.line_numbers = std.meta.stringToEnum(LineNumbers, trimmed) orelse .relative;
                 continue;
             } else if (mem.startsWith(u8, trimmed, "theme = ")) {
-                const theme_name = editor_theme.themeName(trimmed["theme = ".len..]);
-                self.theme = theme_name;
+                const trim_quotes = mem.trim(u8, trimmed["theme = ".len..], "\"");
+                self.theme = try allocator.dupe(u8, trim_quotes);
                 continue;
             }
         }
@@ -100,14 +106,24 @@ pub const Config = struct {
 
         defer file.close(io);
 
-        var buf: [256]u8 = undefined;
+        var buf: [512]u8 = undefined;
         const file_text = try std.fmt.bufPrint(
             &buf,
-            "[editor]\nscroll_buffer = {d}\nline_numbers = \"{s}\"\ntheme = \"{s}\"",
+            \\[editor]
+            \\# how many lines between the cursor and the edge of the editor before scrolling begins
+            \\scroll_buffer = {d}
+            \\# relative or normal
+            \\line_numbers = "{s}"
+            \\# black_and_white, ocean, amber, forest, rose, slate, paper, violet
+            \\# Custom themes can be added by putting placing a file in zag/themes/FILENAME.toml
+            \\# FILENAME and the theme name below must be the same
+            \\# see ./examples/themes/red.toml for an example custom theme
+            \\theme = "{s}"
+        ,
             .{
                 self.scroll_buffer,
                 @tagName(self.line_numbers),
-                @tagName(self.theme),
+                self.theme,
             },
         );
 
