@@ -1,4 +1,5 @@
 const std = @import("std");
+const testing = std.testing;
 const mem = std.mem;
 
 const editor_theme = @import("../ui/theme.zig");
@@ -130,3 +131,14 @@ pub const Config = struct {
         try file.writeStreamingAll(io, file_text);
     }
 };
+
+test "config gets written" {
+    var config: Config = .{};
+    const allocator = testing.allocator;
+    const io = testing.io;
+
+    try config.writeConfig(allocator, io, "./.zig-cache/tmp/");
+    try testing.expectEqual(config.scroll_buffer, 5);
+    try testing.expectEqual(config.line_numbers, .relative);
+    try testing.expectEqual(config.theme, "black_and_white");
+}

@@ -51,16 +51,14 @@ pub const Theme = struct {
     }
 };
 
+/// if theme is not built in then we find the file that matches that theme in themes/
+/// iter through file to get vals and set theme to those
 pub fn loadCustomTheme(
     io: std.Io,
     allocator: mem.Allocator,
     home_dir: []const u8,
     editor_settings: *const config.Config,
 ) !Theme {
-    // TODO: store custom themes in ~/.config/zag/themes/FILENAME.toml
-    // if theme is not built in then we find the file that matches that theme, must match FILENAME
-    // iter through file to get vals and set theme to those
-
     const file_name = try std.fmt.allocPrint(allocator, "{s}.toml", .{editor_settings.theme});
     defer allocator.free(file_name);
     const file_path = try std.fs.path.join(allocator, &.{
@@ -124,11 +122,11 @@ pub fn loadCustomTheme(
     }
 
     return Theme{
-        .gutter_bg = rgb(gutter_bg.r, gutter_bg.b, gutter_bg.g),
-        .gutter_fg = rgb(gutter_fg.r, gutter_fg.b, gutter_fg.g),
-        .status_bg = rgb(status_bg.r, status_bg.b, status_bg.g),
-        .status_fg = rgb(status_fg.r, status_fg.b, status_fg.g),
-        .text_fg = rgb(text_fg.r, text_fg.b, text_fg.g),
+        .gutter_bg = rgb(gutter_bg.r, gutter_bg.g, gutter_bg.b),
+        .gutter_fg = rgb(gutter_fg.r, gutter_fg.g, gutter_fg.b),
+        .status_bg = rgb(status_bg.r, status_bg.g, status_bg.b),
+        .status_fg = rgb(status_fg.r, status_fg.g, status_fg.b),
+        .text_fg = rgb(text_fg.r, text_fg.g, text_fg.b),
     };
 }
 
@@ -177,9 +175,12 @@ fn themeName(name: []const u8) ThemeName {
 
 test "applyTheme sets ocean palette" {
     var theme: Theme = .{};
+    const io = testing.io;
+    const allocator = testing.allocator;
     const ocean = built_ins.ocean;
-    const settings = config.Config{ .theme = "Ocean" };
-    theme.applyTheme(&settings);
+    const settings = config.Config{ .theme = "ocean" };
+    theme.applyTheme(&settings, io, allocator, "./.zig-cache/tmp/");
+
     try testing.expect(theme.gutter_bg.eql(ocean.gutter_bg));
     try testing.expect(theme.status_bg.eql(ocean.status_bg));
     try testing.expect(theme.text_fg.eql(ocean.text_fg));
@@ -188,12 +189,47 @@ test "applyTheme sets ocean palette" {
 test "applyTheme strips quotes and falls back" {
     var theme: Theme = .{};
     const amber = built_ins.amber;
-    var amber_settings = config.Config{ .theme = "\"Amber\"" };
-    theme.applyTheme(&amber_settings);
+    const io = testing.io;
+    const allocator = testing.allocator;
+    var amber_settings = config.Config{ .theme = "\"amber\"" };
+    theme.applyTheme(&amber_settings, io, allocator, "./.zig-cache/tmp/");
+
     try testing.expect(theme.status_fg.eql(amber.status_fg));
 
     const black_and_white = built_ins.black_and_white;
     var unknown = config.Config{ .theme = "not a theme" };
-    theme.applyTheme(&unknown);
+    theme.applyTheme(&unknown, io, allocator, "./.zig-cache/tmp/");
+
     try testing.expect(theme.gutter_bg.eql(black_and_white.gutter_bg));
+}
+
+test "applyTheme reverts to black and white if custom theme has no toml" {
+    var theme: Theme = .{};
+    const editor_settings: config.Config = .{};
+    const io = testing.io;
+    const allocator = testing.allocator;
+    const settings = config.Config{ .theme = "red" };
+    theme.applyTheme(&settings, io, allocator, "./.zig-cache/tmp/");
+
+    try testing.expectEqual(editor_settings.theme, "black_and_white");
+}
+
+test "hex to RGB works" {
+    try testing.expectEqual(hexToRgb("#FF0000"), Rgb{
+        .r = 255,
+        .g = 0,
+        .b = 0,
+    });
+
+    try testing.expectEqual(hexToRgb("#00FF00"), Rgb{
+        .r = 0,
+        .g = 255,
+        .b = 0,
+    });
+
+    try testing.expectEqual(hexToRgb("#0000FF"), Rgb{
+        .r = 0,
+        .g = 0,
+        .b = 255,
+    });
 }

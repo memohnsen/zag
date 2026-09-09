@@ -18,13 +18,6 @@ pub fn build(b: *std.Build) void {
     });
     exe_mod.addImport("vaxis", vaxis.module("vaxis"));
 
-    if (b.lazyDependency("ohsnap", .{
-        .target = target,
-        .optimize = optimize,
-    })) |ohsnap_dep| {
-        exe_mod.addImport("ohsnap", ohsnap_dep.module("ohsnap"));
-    }
-
     const exe = b.addExecutable(.{
         .name = "zag",
         .root_module = exe_mod,

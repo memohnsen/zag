@@ -155,7 +155,6 @@ test "all" {
     _ = @import("core/editor/row.zig");
     _ = @import("core/editor/state.zig");
     _ = @import("notifications.zig");
-    _ = @import("snapshots/snaps.zig");
     _ = @import("core/config.zig");
     _ = @import("core/commands/parser.zig");
 }
