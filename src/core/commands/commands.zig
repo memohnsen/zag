@@ -329,6 +329,8 @@ pub fn handleKey(
                         }
                     }
                 }
+
+                document.syntax_dirty = true;
             },
             .substitute_line => {
                 if (document.currentRow()) |row| {
@@ -338,6 +340,7 @@ pub fn handleKey(
                 } else {
                     document.mode = .INSERT;
                 }
+                document.syntax_dirty = true;
             },
 
             // DELETING TEXT
@@ -363,6 +366,7 @@ pub fn handleKey(
                         try document.joinWithPrevRow(allocator);
                     }
                 }
+                document.syntax_dirty = true;
             },
             .delete_current => {
                 if (document.currentRow()) |row| {
@@ -370,6 +374,7 @@ pub fn handleKey(
                         try row.removeByte(document.cursor_x, allocator);
                     }
                 }
+                document.syntax_dirty = true;
             },
             .delete_line => {
                 try document.removeRow(allocator, document.cursor_y);

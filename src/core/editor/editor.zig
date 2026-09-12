@@ -1,8 +1,10 @@
 const std = @import("std");
 const mem = std.mem;
 const testing = std.testing;
+
 const Row = @import("row.zig").Row;
 const Config = @import("../config.zig").Config;
+const Syntax = @import("../syntax/syntax.zig").Syntax;
 
 pub const Mode = enum {
     NORMAL,
@@ -85,8 +87,14 @@ pub const Editor = struct {
     // ideally we compare against a snapshot of the file
     unsaved_edits: bool = false,
     config: Config = .{},
+    syntax: ?Syntax = null,
+    syntax_dirty: bool = false,
 
     pub fn deinit(self: *Editor, allocator: mem.Allocator) void {
+        if (self.syntax) |*syntax| {
+            syntax.deinit();
+        }
+
         for (self.rows.items) |*row| {
             Row.deinit(row, allocator);
         }
@@ -110,6 +118,7 @@ pub const Editor = struct {
             row.deinit(allocator);
         }
         self.unsaved_edits = true;
+        self.syntax_dirty = true;
     }
 
     pub fn joinWithPrevRow(self: *Editor, allocator: mem.Allocator) !void {
@@ -154,6 +163,7 @@ pub const Editor = struct {
         og_row.chars.shrinkRetainingCapacity(x);
         try og_row.updateRender(allocator);
         self.unsaved_edits = true;
+        self.syntax_dirty = true;
     }
 
     pub fn insertRow(
@@ -166,6 +176,7 @@ pub const Editor = struct {
         errdefer row.deinit(allocator);
         try self.rows.insert(allocator, index, row);
         self.unsaved_edits = true;
+        self.syntax_dirty = true;
     }
 
     pub fn insertNewLine(
@@ -213,6 +224,7 @@ pub const Editor = struct {
         const row = self.currentRow().?;
         try row.insertText(allocator, self.cursor_x, input);
         self.unsaved_edits = true;
+        self.syntax_dirty = true;
         self.cursor_x += input.len;
     }
 
@@ -230,6 +242,7 @@ pub const Editor = struct {
         try self.rows.items[self.cursor_y].removeByte(index, allocator);
         try self.rows.items[self.cursor_y].insertText(allocator, index, input);
         self.unsaved_edits = true;
+        self.syntax_dirty = true;
     }
 
     pub fn currentRow(self: *Editor) ?*Row {
@@ -311,6 +324,7 @@ pub const Editor = struct {
                 .data = text,
             });
             self.unsaved_edits = false;
+            self.syntax_dirty = false;
             return .success;
         } else {
             return .no_filename;
@@ -555,6 +569,45 @@ pub const Editor = struct {
         }
 
         self.cursor_y = index;
+    }
+
+    pub fn joinSource(self: *const Editor, allocator: mem.Allocator) ![]u8 {
+        var total: usize = 0;
+        for (self.rows.items) |row| {
+            total += row.chars.items.len;
+        }
+        if (self.rows.items.len > 0) {
+            total += self.rows.items.len - 1;
+        }
+
+        var out = try allocator.alloc(u8, total);
+        var i: usize = 0;
+        for (self.rows.items, 0..) |row, index| {
+            const line = row.chars.items;
+            @memcpy(out[i..][0..line.len], line);
+            i += line.len;
+
+            if (index + 1 < self.rows.items.len) {
+                out[i] = '\n';
+                i += 1;
+            }
+        }
+
+        return out;
+    }
+
+    pub fn refreshSyntax(self: *Editor, allocator: mem.Allocator) !void {
+        if (!self.syntax_dirty) return;
+        // NOTE: Update this anytime new language is supported
+        if (self.getFileType() != .zig) return;
+
+        const syn = if (self.syntax) |*s| s else return;
+        const source = try self.joinSource(allocator);
+        defer allocator.free(source);
+
+        syn.parse(source);
+        try syn.collectHighlights();
+        self.syntax_dirty = false;
     }
 };
 
@@ -1171,6 +1224,27 @@ test "test file type" {
     try testing.expectEqual(.typescript, document.getFileType());
     try document.setFilenameAs(allocator, "hello.odin");
     try testing.expectEqual(.odin, document.getFileType());
+}
+
+test "refreshSyntax highlights text inserted after first parse" {
+    const allocator = testing.allocator;
+    var document = Editor{};
+    defer document.deinit(allocator);
+
+    document.syntax = try Syntax.init(allocator);
+    try document.setFilenameAs(allocator, "t.zig");
+    try document.appendRow(allocator, "");
+    try document.refreshSyntax(allocator);
+    try document.insertText(allocator, "const");
+    try document.refreshSyntax(allocator);
+
+    var found_keyword = false;
+    if (document.syntax) |syn| {
+        for (syn.highlights.items) |hl| {
+            if (mem.eql(u8, hl.name, "keyword")) found_keyword = true;
+        }
+    }
+    try testing.expect(found_keyword);
 }
 
 // MOVING TEXT

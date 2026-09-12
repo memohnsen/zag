@@ -30,6 +30,7 @@ pub fn handleNotifications(
                 const text = try std.fmt.bufPrint(&notif_buf, "Saving failed, no file name found.", .{});
                 try editor_state.showNotification(document, allocator, text, io);
                 document.unsaved_edits = true;
+                document.syntax_dirty = true;
             },
         }
 
@@ -92,6 +93,7 @@ test "saving failed message" {
     document.filename = try allocator.dupe(u8, "./sample/tst.txt");
     editor_state.save_requested = true;
     document.unsaved_edits = true;
+    document.syntax_dirty = true;
     try handleNotifications(&editor_state, &document, allocator, io);
     try testing.expect(mem.startsWith(u8, editor_state.command_buffer.items, "Saving failed:"));
     try testing.expect(editor_state.save_requested == false);

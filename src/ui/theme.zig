@@ -31,6 +31,14 @@ pub const Theme = struct {
     status_fg: vaxis.Color = rgb(0, 0, 0),
     text_fg: vaxis.Color = rgb(255, 255, 255),
 
+    variable_fg: vaxis.Color = rgb(137, 180, 250),
+    keyword_fg: vaxis.Color = rgb(203, 166, 247),
+    type_fg: vaxis.Color = rgb(249, 226, 175),
+    string_fg: vaxis.Color = rgb(166, 227, 161),
+    comment_fg: vaxis.Color = rgb(108, 112, 134),
+    number_fg: vaxis.Color = rgb(250, 179, 135),
+    function_fg: vaxis.Color = rgb(137, 220, 235),
+
     pub fn applyTheme(
         self: *Theme,
         editor_settings: *const config.Config,

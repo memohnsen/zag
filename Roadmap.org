@@ -1,9 +1,18 @@
 * Roadmap for Zag
-- [ ] text viewer in side bar
-- [ ] windows
-- [ ] Add treesitter
-- [ ] Add text highlighting
-- [ ] undo redo
-- [ ] file tab line
-- [ ] integrated terminal
-- [ ] session management
+** Treesitter
+*** incremental parsing
+*** update themes
+*** other langs
+**** rust
+**** C
+**** swift
+**** TS
+**** python
+** windows
+** undo redo
+** file buffer line
+** multiple buffers
+** integrated terminal
+** session management
+** home screen when open not with args
+** fav dir list

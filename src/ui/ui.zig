@@ -101,6 +101,29 @@ fn drawRows(
             printGutter(gutter_window, line_number, screen_row, 0, theme);
             printAt(text_window, chars[start..], screen_row, 0, theme);
 
+            if (document.syntax) |syn| {
+                for (syn.highlights.items) |hl| {
+                    if (file_row < hl.start_row or file_row > hl.end_row) continue;
+
+                    const line_len = row.render.items.len;
+                    const hl_start: usize = if (file_row == hl.start_row) hl.start_col else 0;
+                    const hl_end: usize = if (file_row == hl.end_row) hl.end_col else line_len;
+                    const visible_start = @max(hl_start, document.col_offset);
+                    const visible_end = @min(hl_end, @min(line_len, document.col_offset + text_window.width));
+
+                    if (visible_start >= visible_end) continue;
+
+                    _ = text_window.printSegment(.{
+                        .text = row.render.items[visible_start..visible_end],
+                        .style = .{ .fg = colorForCapture(hl.name, theme) },
+                    }, .{
+                        .row_offset = @intCast(screen_row),
+                        .col_offset = @intCast(visible_start - document.col_offset),
+                        .wrap = .none,
+                    });
+                }
+            }
+
             if (file_row == document.cursor_y and
                 query != null and
                 document.cursor_x <= row.chars.items.len and
@@ -284,6 +307,18 @@ fn printGutter(
             .wrap = .none,
         },
     );
+}
+
+fn colorForCapture(name: []const u8, theme: *const editor_theme.Theme) vaxis.Color {
+    if (std.mem.eql(u8, name, "keyword")) return theme.keyword_fg;
+    if (std.mem.eql(u8, name, "type")) return theme.type_fg;
+    if (std.mem.eql(u8, name, "string")) return theme.string_fg;
+    if (std.mem.eql(u8, name, "comment")) return theme.comment_fg;
+    if (std.mem.eql(u8, name, "number")) return theme.number_fg;
+    if (std.mem.eql(u8, name, "function")) return theme.function_fg;
+    if (std.mem.eql(u8, name, "variable")) return theme.variable_fg;
+
+    return theme.text_fg;
 }
 
 fn lineNumberWidth(document: *const editor.Editor) usize {

@@ -8,10 +8,15 @@
             .url = "git+https://github.com/rockorager/libvaxis.git#5ca495f09f413c66789d9c5061359b941a8d82c2",
             .hash = "vaxis-0.6.0-BWNV_KwYCgDSbZigsbwnpd5oQXBDRcAKMlkZRwbKMX7t",
         },
+        .tree_sitter = .{
+            .url = "git+https://github.com/tree-sitter/zig-tree-sitter#b562510b5563dcf3b7fcac4a5fe9d60834c84667",
+            .hash = "tree_sitter-0.26.0-8heIf-vDAQDh0HhAAUVwVZFmLrwSKMZl5gRaVFqtas0W",
+        },
     },
     .paths = .{
         "build.zig",
         "build.zig.zon",
         "src",
+        "vendor",
     },
 }

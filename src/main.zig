@@ -9,6 +9,7 @@ const commands = @import("core/commands/commands.zig");
 const state = @import("core/editor/state.zig");
 const notifs = @import("notifications.zig");
 const config = @import("core/config.zig");
+const syntax = @import("core/syntax/syntax.zig");
 
 const Event = union(enum) {
     key_press: vaxis.Key,
@@ -37,6 +38,8 @@ fn run(init: std.process.Init) !void {
 
     var document = editor.Editor{ .config = editor_settings };
     defer document.deinit(gpa);
+
+    document.syntax = try syntax.Syntax.init(gpa);
 
     // Get args and skip the first
     const args = init.minimal.args;
@@ -90,6 +93,8 @@ fn run(init: std.process.Init) !void {
         const text_height = window.height -| 2;
         document.scroll(text_height, window.width);
         editor_state.hideNotification(&document, io);
+        document.syntax_dirty = true;
+        document.refreshSyntax(gpa) catch {};
         try ui.refresh(&vx, tty.writer(), &document, &editor_state, &ui_buffers, &theme);
         // subtract 2 lines due to command and status bar
         document.rows_shown = vx.window().height -| 2;
@@ -145,6 +150,8 @@ fn handleArgs(
                 return err;
             };
         }
+
+        try document.refreshSyntax(gpa);
     }
 }
 

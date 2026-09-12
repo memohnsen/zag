@@ -18,6 +18,28 @@ pub fn build(b: *std.Build) void {
     });
     exe_mod.addImport("vaxis", vaxis.module("vaxis"));
 
+    const tree_sitter = b.dependency("tree_sitter", .{
+        .target = target,
+        .optimize = optimize,
+    });
+    exe_mod.addImport("tree_sitter", tree_sitter.module("tree_sitter"));
+
+    const tree_sitter_zig = b.addLibrary(.{
+        .name = "tree-sitter-zig",
+        .linkage = .static,
+        .root_module = b.createModule(.{
+            .target = target,
+            .optimize = optimize,
+            .link_libc = true,
+        }),
+    });
+    tree_sitter_zig.root_module.addCSourceFile(.{
+        .file = b.path("vendor/tree-sitter-zig/src/parser.c"),
+        .flags = &.{"-std=c11"},
+    });
+    tree_sitter_zig.root_module.addIncludePath(b.path("vendor/tree-sitter-zig/src"));
+    exe_mod.linkLibrary(tree_sitter_zig);
+
     const exe = b.addExecutable(.{
         .name = "zag",
         .root_module = exe_mod,
