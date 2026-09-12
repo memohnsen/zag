@@ -115,7 +115,7 @@ pub const Config = struct {
             \\scroll_buffer = {d}
             \\# relative or normal
             \\line_numbers = "{s}"
-            \\# default, ocean, amber, forest, rose, slate, paper, violet
+            \\# default, catppuccin, ocean, amber, forest, rose, slate, paper, violet
             \\# Custom themes can be added by putting placing a file in zag/themes/FILENAME.toml
             \\# FILENAME and the theme name below must be the same
             \\# see ./examples/themes/red.toml for an example custom theme

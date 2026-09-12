@@ -4,6 +4,21 @@ const rgb = theme.rgb;
 
 pub const default: Theme = .{
     .gutter_bg = rgb(0, 0, 0),
+    .gutter_fg = rgb(107, 114, 128),
+    .status_bg = rgb(22, 27, 34),
+    .status_fg = rgb(216, 222, 233),
+    .text_fg = rgb(216, 222, 233),
+    .variable_fg = rgb(216, 222, 233),
+    .keyword_fg = rgb(215, 135, 255),
+    .type_fg = rgb(255, 216, 102),
+    .string_fg = rgb(152, 224, 108),
+    .comment_fg = rgb(107, 114, 128),
+    .number_fg = rgb(255, 159, 67),
+    .function_fg = rgb(90, 169, 255),
+};
+
+pub const catppuccin: Theme = .{
+    .gutter_bg = rgb(0, 0, 0),
     .gutter_fg = rgb(180, 180, 180),
     .status_bg = rgb(220, 220, 220),
     .status_fg = rgb(0, 0, 0),

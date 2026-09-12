@@ -15,6 +15,7 @@ const Rgb = struct {
 
 pub const ThemeName = union(enum) {
     default,
+    catppuccin,
     ocean,
     amber,
     forest,
@@ -26,18 +27,18 @@ pub const ThemeName = union(enum) {
 
 pub const Theme = struct {
     gutter_bg: vaxis.Color = rgb(0, 0, 0),
-    gutter_fg: vaxis.Color = rgb(255, 255, 255),
-    status_bg: vaxis.Color = rgb(255, 255, 255),
-    status_fg: vaxis.Color = rgb(0, 0, 0),
-    text_fg: vaxis.Color = rgb(255, 255, 255),
+    gutter_fg: vaxis.Color = rgb(107, 114, 128),
+    status_bg: vaxis.Color = rgb(22, 27, 34),
+    status_fg: vaxis.Color = rgb(216, 222, 233),
+    text_fg: vaxis.Color = rgb(216, 222, 233),
 
-    variable_fg: vaxis.Color = rgb(137, 180, 250),
-    keyword_fg: vaxis.Color = rgb(203, 166, 247),
-    type_fg: vaxis.Color = rgb(249, 226, 175),
-    string_fg: vaxis.Color = rgb(166, 227, 161),
-    comment_fg: vaxis.Color = rgb(108, 112, 134),
-    number_fg: vaxis.Color = rgb(250, 179, 135),
-    function_fg: vaxis.Color = rgb(137, 220, 235),
+    variable_fg: vaxis.Color = rgb(216, 222, 233),
+    keyword_fg: vaxis.Color = rgb(215, 135, 255),
+    type_fg: vaxis.Color = rgb(255, 216, 102),
+    string_fg: vaxis.Color = rgb(152, 224, 108),
+    comment_fg: vaxis.Color = rgb(107, 114, 128),
+    number_fg: vaxis.Color = rgb(255, 159, 67),
+    function_fg: vaxis.Color = rgb(90, 169, 255),
 
     pub fn applyTheme(
         self: *Theme,
@@ -48,6 +49,7 @@ pub const Theme = struct {
     ) void {
         self.* = switch (themeName(editor_settings.theme)) {
             .default => built_ins.default,
+            .catppuccin => built_ins.catppuccin,
             .ocean => built_ins.ocean,
             .amber => built_ins.amber,
             .forest => built_ins.forest,
@@ -219,6 +221,7 @@ fn themeName(name: []const u8) ThemeName {
     if (mem.eql(u8, trimmed, "slate")) return .slate;
     if (mem.eql(u8, trimmed, "violet")) return .violet;
     if (mem.eql(u8, trimmed, "default")) return .default;
+    if (mem.eql(u8, trimmed, "catppuccin")) return .catppuccin;
 
     return .{ .custom = name };
 }
