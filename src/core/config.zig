@@ -12,7 +12,7 @@ const LineNumbers = enum {
 pub const Config = struct {
     scroll_buffer: u16 = 5,
     line_numbers: LineNumbers = .relative,
-    theme: []const u8 = "black_and_white",
+    theme: []const u8 = "default",
 
     pub fn deinit(self: *Config, allocator: mem.Allocator) void {
         allocator.free(self.theme);
@@ -115,7 +115,7 @@ pub const Config = struct {
             \\scroll_buffer = {d}
             \\# relative or normal
             \\line_numbers = "{s}"
-            \\# black_and_white, ocean, amber, forest, rose, slate, paper, violet
+            \\# default, ocean, amber, forest, rose, slate, paper, violet
             \\# Custom themes can be added by putting placing a file in zag/themes/FILENAME.toml
             \\# FILENAME and the theme name below must be the same
             \\# see ./examples/themes/red.toml for an example custom theme
@@ -140,5 +140,5 @@ test "config gets written" {
     try config.writeConfig(allocator, io, "./.zig-cache/tmp/");
     try testing.expectEqual(config.scroll_buffer, 5);
     try testing.expectEqual(config.line_numbers, .relative);
-    try testing.expectEqual(config.theme, "black_and_white");
+    try testing.expectEqual(config.theme, "default");
 }

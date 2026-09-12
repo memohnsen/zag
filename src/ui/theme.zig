@@ -14,7 +14,7 @@ const Rgb = struct {
 };
 
 pub const ThemeName = union(enum) {
-    black_and_white,
+    default,
     ocean,
     amber,
     forest,
@@ -47,14 +47,14 @@ pub const Theme = struct {
         home_dir: []const u8,
     ) void {
         self.* = switch (themeName(editor_settings.theme)) {
-            .black_and_white => built_ins.black_and_white,
+            .default => built_ins.default,
             .ocean => built_ins.ocean,
             .amber => built_ins.amber,
             .forest => built_ins.forest,
             .rose => built_ins.rose,
             .slate => built_ins.slate,
             .violet => built_ins.violet,
-            .custom => loadCustomTheme(io, allocator, home_dir, editor_settings) catch built_ins.black_and_white,
+            .custom => loadCustomTheme(io, allocator, home_dir, editor_settings) catch built_ins.default,
         };
     }
 };
@@ -99,6 +99,13 @@ pub fn loadCustomTheme(
     var status_bg: Rgb = undefined;
     var status_fg: Rgb = undefined;
     var text_fg: Rgb = undefined;
+    var variable_fg: Rgb = undefined;
+    var keyword_fg: Rgb = undefined;
+    var type_fg: Rgb = undefined;
+    var string_fg: Rgb = undefined;
+    var comment_fg: Rgb = undefined;
+    var number_fg: Rgb = undefined;
+    var function_fg: Rgb = undefined;
 
     var lines = mem.splitScalar(u8, contents, '\n');
     while (lines.next()) |line| {
@@ -127,6 +134,34 @@ pub fn loadCustomTheme(
             text_fg = try hexToRgb(trimmed["text_fg = ".len..]);
             continue;
         }
+        if (mem.startsWith(u8, trimmed, "variable_fg = ")) {
+            variable_fg = try hexToRgb(trimmed["variable_fg = ".len..]);
+            continue;
+        }
+        if (mem.startsWith(u8, trimmed, "keyword_fg = ")) {
+            keyword_fg = try hexToRgb(trimmed["keyword_fg = ".len..]);
+            continue;
+        }
+        if (mem.startsWith(u8, trimmed, "type_fg = ")) {
+            type_fg = try hexToRgb(trimmed["type_fg = ".len..]);
+            continue;
+        }
+        if (mem.startsWith(u8, trimmed, "string_fg = ")) {
+            string_fg = try hexToRgb(trimmed["string_fg = ".len..]);
+            continue;
+        }
+        if (mem.startsWith(u8, trimmed, "comment_fg = ")) {
+            comment_fg = try hexToRgb(trimmed["comment_fg = ".len..]);
+            continue;
+        }
+        if (mem.startsWith(u8, trimmed, "number_fg = ")) {
+            number_fg = try hexToRgb(trimmed["number_fg = ".len..]);
+            continue;
+        }
+        if (mem.startsWith(u8, trimmed, "function_fg = ")) {
+            function_fg = try hexToRgb(trimmed["function_fg = ".len..]);
+            continue;
+        }
     }
 
     return Theme{
@@ -135,6 +170,13 @@ pub fn loadCustomTheme(
         .status_bg = rgb(status_bg.r, status_bg.g, status_bg.b),
         .status_fg = rgb(status_fg.r, status_fg.g, status_fg.b),
         .text_fg = rgb(text_fg.r, text_fg.g, text_fg.b),
+        .variable_fg = rgb(variable_fg.r, variable_fg.g, variable_fg.b),
+        .keyword_fg = rgb(keyword_fg.r, keyword_fg.g, keyword_fg.b),
+        .type_fg = rgb(type_fg.r, type_fg.g, type_fg.b),
+        .string_fg = rgb(string_fg.r, string_fg.g, string_fg.b),
+        .comment_fg = rgb(comment_fg.r, comment_fg.g, comment_fg.b),
+        .number_fg = rgb(number_fg.r, number_fg.g, number_fg.b),
+        .function_fg = rgb(function_fg.r, function_fg.g, function_fg.b),
     };
 }
 
@@ -176,7 +218,7 @@ fn themeName(name: []const u8) ThemeName {
     if (mem.eql(u8, trimmed, "rose")) return .rose;
     if (mem.eql(u8, trimmed, "slate")) return .slate;
     if (mem.eql(u8, trimmed, "violet")) return .violet;
-    if (mem.eql(u8, trimmed, "black_and_white")) return .black_and_white;
+    if (mem.eql(u8, trimmed, "default")) return .default;
 
     return .{ .custom = name };
 }
@@ -204,14 +246,14 @@ test "applyTheme strips quotes and falls back" {
 
     try testing.expect(theme.status_fg.eql(amber.status_fg));
 
-    const black_and_white = built_ins.black_and_white;
+    const default_theme = built_ins.default;
     var unknown = config.Config{ .theme = "not a theme" };
     theme.applyTheme(&unknown, io, allocator, "./.zig-cache/tmp/");
 
-    try testing.expect(theme.gutter_bg.eql(black_and_white.gutter_bg));
+    try testing.expect(theme.gutter_bg.eql(default_theme.gutter_bg));
 }
 
-test "applyTheme reverts to black and white if custom theme has no toml" {
+test "applyTheme reverts to default if custom theme has no toml" {
     var theme: Theme = .{};
     const editor_settings: config.Config = .{};
     const io = testing.io;
@@ -219,7 +261,7 @@ test "applyTheme reverts to black and white if custom theme has no toml" {
     const settings = config.Config{ .theme = "red" };
     theme.applyTheme(&settings, io, allocator, "./.zig-cache/tmp/");
 
-    try testing.expectEqual(editor_settings.theme, "black_and_white");
+    try testing.expectEqual(editor_settings.theme, "default");
 }
 
 test "hex to RGB works" {

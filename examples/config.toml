@@ -3,8 +3,8 @@
 scroll_buffer = 5
 # relative or normal
 line_numbers = "relative"
-# black_and_white, ocean, amber, forest, rose, slate, paper, violet
+# default, ocean, amber, forest, rose, slate, paper, violet
 # Custom themes can be added by putting placing a file in zag/themes/FILENAME.toml
 # FILENAME and the theme name below must be the same
 # see ./examples/themes/red.toml for an example custom theme
-theme = "black_and_white"
+theme = "default"

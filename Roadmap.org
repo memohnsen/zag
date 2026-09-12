@@ -1,7 +1,6 @@
 * Roadmap for Zag
 ** Treesitter
 *** incremental parsing
-*** update themes
 *** other langs
 **** rust
 **** C
